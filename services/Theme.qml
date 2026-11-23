@@ -6,7 +6,9 @@ import Quickshell.Io
 // The look. The desktop's own colours (the Material palette iNiR generates from the wallpaper) laid out as three
 // columns a step apart (rail, canvas, aside), smoked toward a neutral graphite so the tint stays quiet; fields pressed
 // into the surface (a darker top edge, a lit bottom one), an edge of light on what is raised, and the chosen thing as
-// a solid pill in the accent. With no palette on disk it falls back to the same graphite with a blue accent.
+// a solid pill in the accent. The palette is the one the shell hands to apps (app-palette.json: its scheme with the
+// global style laid over it), else the scheme as generated (colors.json); both are watched, so the app follows the
+// shell as it changes. With no palette on disk it falls back to the same graphite with a blue accent.
 Singleton {
     id: root
 
@@ -14,7 +16,9 @@ Singleton {
     readonly property string stateHome: Quickshell.env("XDG_STATE_HOME") || (root.home + "/.local/state")
     readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || (root.home + "/.config")
 
-    property var pal: ({})
+    property var appPal: ({})
+    property var schemePal: ({})
+    readonly property var pal: root.appPal.surface !== undefined ? root.appPal : root.schemePal
     property string systemMode: "dark"
     property var typography: ({})
 
@@ -22,12 +26,24 @@ Singleton {
         try { return JSON.parse(text) } catch (e) { return ({}) }
     }
 
+    // A palette half written reads as nothing: the last whole one stays until the next change.
+    function take(text: string, keep: var): var {
+        const p = root.parse(text)
+        return p.surface !== undefined && p.primary !== undefined ? p : keep
+    }
+    FileView {
+        path: root.stateHome + "/quickshell/user/generated/app-palette.json"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.appPal = root.take(text(), root.appPal)
+    }
     FileView {
         path: root.stateHome + "/quickshell/user/generated/colors.json"
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
-        onLoaded: root.pal = root.parse(text())
+        onLoaded: root.schemePal = root.take(text(), root.schemePal)
     }
     FileView {
         path: root.stateHome + "/quickshell/user/generated/theme-meta.json"
