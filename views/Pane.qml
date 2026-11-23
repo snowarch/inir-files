@@ -33,6 +33,9 @@ FocusScope {
             root.shownPlace = folder.place
         }
         onReset: {
+            // A new place arrives with a short fade, so the eye reads the swap as one step. Columns keep the columns
+            // that stay, so they do not fade.
+            if (Theme.motion && root.viewMode !== "columns") arrive.restart()
             const y = root.memo[folder.place]
             Qt.callLater(() => {
                 const v = root.view
@@ -187,6 +190,7 @@ FocusScope {
         focus: true
         sourceComponent: root.viewMode === "list" ? listView : root.viewMode === "columns" ? columnsView : gridView
     }
+    NumberAnimation { id: arrive; target: loader; property: "opacity"; from: 0; to: 1; duration: Theme.fast; easing.type: Easing.OutCubic }
     Component { id: gridView; GridPane { pane: root } }
     Component { id: listView; ListPane { pane: root } }
     Component { id: columnsView; ColumnsPane { pane: root } }
