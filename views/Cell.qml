@@ -13,6 +13,8 @@ Item {
     required property bool dir
     property var pane
     property real iconSize: 72
+    // How much past iconSize a picture may draw: it fills the whole plate.
+    property real grow: 0
 
     readonly property var folder: root.pane.folder
     readonly property bool chosen: { void root.folder.selRev; return root.folder.isSel(root.path) }
@@ -26,6 +28,9 @@ Item {
     property bool dropping: false
 
     z: root.chosen || root.renaming ? 2 : 0
+
+    // Cells are kept and handed to other entries as the grid scrolls: one leaves with nothing of the last entry's.
+    GridView.onPooled: { root.dropping = false; spring.stop() }
 
     function inside(x: real, y: real): bool {
         const inPlate = x >= plate.x && x <= plate.x + plate.width && y >= plate.y && y <= plate.y + plate.height
@@ -52,7 +57,7 @@ Item {
         x: plate.x + Math.round((plate.width - width) / 2)
         y: plate.y + Math.round((plate.height - height) / 2)
         size: root.iconSize
-        grow: Theme.dp(12)
+        grow: root.grow
         entry: root.model
         dim: root.cut
         scale: root.dropping ? 1.06 : 1
@@ -71,14 +76,16 @@ Item {
         color: root.spills ? Qt.tint(Theme.canvas, pill.tint) : pill.tint
         border.width: root.spills && !Theme.light ? 1 : 0
         border.color: Theme.line
-        RectangularShadow {
-            visible: root.spills
+        Loader {
+            active: root.spills
             z: -1
             anchors.fill: parent
-            radius: parent.radius
-            blur: Theme.dp(12)
-            offset.y: Theme.dp(3)
-            color: Theme.shadow
+            sourceComponent: RectangularShadow {
+                radius: pill.radius
+                blur: Theme.dp(12)
+                offset.y: Theme.dp(3)
+                color: Theme.shadow
+            }
         }
     }
     Txt {

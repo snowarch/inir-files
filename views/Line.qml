@@ -35,6 +35,8 @@ Item {
     readonly property bool joinUp: { void root.folder.selRev; const e = root.folder.all[root.index - 1]; return root.chosen && !!e && root.folder.isSel(e.path) }
     readonly property bool joinDown: { void root.folder.selRev; const e = root.folder.all[root.index + 1]; return root.chosen && !!e && root.folder.isSel(e.path) }
     property bool dropping: false
+    // Rows are kept and handed to other entries as the list scrolls: one leaves with nothing of the last entry's.
+    ListView.onPooled: { root.dropping = false; spring.stop() }
 
     function value(key: string): string {
         switch (key) {

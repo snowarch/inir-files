@@ -18,16 +18,16 @@ Item {
     readonly property real mtime: root.entry?.mtime ?? 0
     readonly property real dpr: root.Window.window?.devicePixelRatio ?? 1
     readonly property real px: (root.size + root.grow) * root.dpr
-    readonly property string thumbSize: root.px <= 128 ? "normal" : root.px <= 256 ? "large" : root.px <= 512 ? "x-large" : "xx-large"
+    readonly property string thumbSize: Core.thumbSize(root.px)
     readonly property bool dir: root.entry?.dir === true
     // A drawn folder holds a picture from inside it: its cover, else its first picture.
     readonly property bool cover: root.dir && root.size >= 48 && Prefs.get("covers") !== false && Prefs.get("icons") !== "system"
         && root.entry.role !== "trash"
     readonly property bool wantsThumb: root.allowThumb && !!root.entry && root.size >= 28
-        && Prefs.get("thumbnails") !== "never" && !(Prefs.get("thumbnails") === "local" && root.entry.remote === true)
-        && (root.cover || root.entry.thumb === true
-            && !(["image", "pdf"].includes(root.entry.kind) && root.entry.size > Number(Prefs.get("thumbLimit")) * 1000000))
+        && (root.cover ? Core.thumbsOn(root.entry) : Core.wantsThumb(root.entry))
     property string thumbFile: ""
+    // The core's answer is in: a picture, or none to be had.
+    property bool thumbSettled: true
     property var asked: null
 
     implicitWidth: root.size
@@ -37,9 +37,11 @@ Item {
     function ask(): void {
         if (root.asked) Core.unthumb(root.asked.path, root.asked.size, root.asked.mtime, root)
         root.asked = null
-        if (!root.wantsThumb || root.path.length === 0) { root.thumbFile = ""; return }
+        if (!root.wantsThumb || root.path.length === 0) { root.thumbFile = ""; root.thumbSettled = true; return }
         root.asked = { path: root.path, size: root.thumbSize, mtime: root.mtime }
-        root.thumbFile = Core.thumb(root.path, root.thumbSize, root.mtime, root)
+        const known = Core.thumb(root.path, root.thumbSize, root.mtime, root)
+        root.thumbFile = known ?? ""
+        root.thumbSettled = known !== null
     }
     onPathChanged: root.ask()
     onMtimeChanged: root.ask()
@@ -49,6 +51,10 @@ Item {
     Component.onDestruction: if (root.asked) Core.unthumb(root.asked.path, root.asked.size, root.asked.mtime, root)
 
     readonly property bool showThumb: !root.dir && root.thumbFile.length > 0 && thumb.status !== Image.Error
+    readonly property bool thumbReady: root.showThumb && thumb.status === Image.Ready
+    // A photo or a film on its way: a quiet tile where it lands, not an icon that gives way to it a moment later.
+    readonly property bool awaiting: !root.dir && !root.thumbReady && (root.entry?.kind === "image" || root.entry?.kind === "video")
+        && (!root.thumbSettled || root.showThumb)
     // A launcher wears its app's icon, with either set of icons: a theme name or a file.
     readonly property string appIcon: {
         const a = root.entry?.appIcon ?? ""
@@ -90,29 +96,49 @@ Item {
             border.color: Theme.light ? Qt.rgba(0, 0, 0, 0.12) : Qt.rgba(1, 1, 1, 0.1)
         }
         // A film plays: a mark in the corner.
-        Rectangle {
-            visible: root.badge && thumb.status === Image.Ready && root.entry?.kind === "video" && root.size >= 40
-            width: Math.max(16, root.size * 0.26)
+        // The Loader takes its size from the mark, so it is placed by the picture's own edges.
+        Loader {
+            readonly property real side: Math.max(16, root.size * 0.26)
+            readonly property real inset: Math.max(4, root.size * 0.05)
+            active: root.badge && thumb.status === Image.Ready && root.entry?.kind === "video" && root.size >= 40
+            x: (thumb.width - thumb.paintedWidth) / 2 + inset
+            y: (thumb.height + thumb.paintedHeight) / 2 - side - inset
+            sourceComponent: Rectangle {
+            width: parent ? parent.side : 16
             height: width
             radius: width / 2
-            x: (parent.width - thumb.paintedWidth) / 2 + Math.max(4, root.size * 0.05)
-            y: (parent.height + thumb.paintedHeight) / 2 - height - Math.max(4, root.size * 0.05)
             color: Qt.rgba(0.03, 0.03, 0.04, 0.66)
             Glyph { anchors.centerIn: parent; name: "play_arrow"; fill: 1; size: parent.width * 0.68; color: "#ffffff" }
+        } }
+    }
+    Rectangle {
+        // Fades as the picture fades in over it.
+        opacity: root.awaiting ? 1 : 0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: Theme.fast } }
+        anchors.centerIn: parent
+        width: Math.round((root.size + root.grow) * 0.94)
+        height: Math.round(width * (root.entry?.kind === "video" ? 0.5625 : 0.75))
+        radius: Math.max(2, Math.round(root.size * 0.04))
+        color: Theme.fill
+    }
+    Loader {
+        anchors.fill: parent
+        active: !root.thumbReady && !root.awaiting && root.systemIcon.length > 0
+        sourceComponent: Image {
+            source: root.systemIcon
+            sourceSize.width: root.px
+            sourceSize.height: root.px
+            asynchronous: true
+            smooth: true
         }
     }
-    Image {
+    Loader {
         anchors.fill: parent
-        visible: !root.showThumb && root.systemIcon.length > 0
-        source: root.systemIcon
-        sourceSize.width: root.px
-        sourceSize.height: root.px
-        asynchronous: true
-        smooth: true
+        active: !root.thumbReady && !root.awaiting && root.systemIcon.length === 0
+        sourceComponent: art
     }
-    FileArt {
-        visible: !root.showThumb && root.systemIcon.length === 0 || (root.showThumb && thumb.status !== Image.Ready && root.systemIcon.length === 0)
-        anchors.fill: parent
+    Component { id: art; FileArt {
         size: root.size
         folder: root.entry?.dir ?? false
         kind: root.entry?.kind ?? "file"
@@ -125,5 +151,5 @@ Item {
         link: root.entry?.link ?? false
         broken: root.entry?.broken ?? false
         cover: root.cover ? root.thumbFile : ""
-    }
+    } }
 }

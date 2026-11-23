@@ -100,7 +100,21 @@ Singleton {
     property var thumbWaiters: ({})
     property var thumbAsk: ({})
     function thumbKey(path: string, size: string, mtime: real): string { return path + "|" + size + "|" + mtime }
-    function thumb(path: string, size: string, mtime: real, item: var): string {
+    // The freedesktop size a picture drawn px device pixels wide is read from.
+    function thumbSize(px: real): string { return px <= 128 ? "normal" : px <= 256 ? "large" : px <= 512 ? "x-large" : "xx-large" }
+    // Whether the settings let an entry have pictures at all: never, or only on this computer.
+    function thumbsOn(e: var): bool {
+        const mode = Prefs.get("thumbnails")
+        return !!e && mode !== "never" && !(mode === "local" && e.remote === true)
+    }
+    // Whether an entry gets a picture of its own: one can be made, and it is not past the size limit.
+    function wantsThumb(e: var): bool {
+        return root.thumbsOn(e) && e.thumb === true && !e.dir
+            && !(["image", "pdf"].includes(e.kind) && e.size > Number(Prefs.get("thumbLimit")) * 1000000)
+    }
+    // The picture for path at size: its file ("" when none can be had) once known, else null; the answer then goes to
+    // item's thumbFile.
+    function thumb(path: string, size: string, mtime: real, item: var): var {
         const key = root.thumbKey(path, size, mtime)
         if (root.thumbs[key] !== undefined) return root.thumbs[key]
         const list = root.thumbWaiters[key] ?? []
@@ -108,8 +122,21 @@ Singleton {
         root.thumbWaiters[key] = list
         if (!root.thumbAsk[size]) root.thumbAsk[size] = []
         if (list.length === 1) root.thumbAsk[size].push(path + "\n" + mtime)
-        thumbFlush.restart()
-        return ""
+        // Started, not restarted: a scroll that keeps making cells still sends its asks every few frames.
+        if (!thumbFlush.running) thumbFlush.start()
+        return null
+    }
+    // The rest of a folder, made before it is scrolled to: behind all that is on screen, in the folder's order.
+    function thumbAhead(list: var, size: string): void {
+        const paths = []
+        for (const e of list) {
+            if (paths.length >= 5000) break
+            if (!root.wantsThumb(e)) continue
+            if (root.thumbs[root.thumbKey(e.path, size, e.mtime)] !== undefined) continue
+            root.thumbMtimes[e.path + "|" + size] = e.mtime
+            paths.push(e.path)
+        }
+        if (paths.length > 0) root.call("thumb", { paths: paths, size: size, ahead: true })
     }
     function unthumb(path: string, size: string, mtime: real, item: var): void {
         const key = root.thumbKey(path, size, mtime)
@@ -122,7 +149,7 @@ Singleton {
     property var thumbMtimes: ({})
     Timer {
         id: thumbFlush
-        interval: 24
+        interval: 16
         onTriggered: {
             for (const size in root.thumbAsk) {
                 const asks = root.thumbAsk[size]
@@ -147,7 +174,7 @@ Singleton {
         if (!list) return
         delete root.thumbWaiters[key]
         for (const item of list) {
-            try { if (item && item.path === m.path) item.thumbFile = m.file } catch (e) {}
+            try { if (item && item.path === m.path) { item.thumbFile = m.file; item.thumbSettled = true } } catch (e) {}
         }
     }
 

@@ -12,7 +12,8 @@ libc = "0.2"
 notify = { version = "8", default-features = false }
 trash = "5"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp", "tiff", "ico", "tga"] }
-jpeg-decoder = "0.3"
+# Its own thread pool off: the thumbnail workers already run one picture per core.
+jpeg-decoder = { version = "0.3", default-features = false }
 png = "0.17"
 imagesize = "0.13"
 kamadak-exif = "0.6"

@@ -171,6 +171,7 @@ Item {
             flickableDirection: Flickable.AutoFlickDirection
             contentWidth: root.contentWidth
             cacheBuffer: Math.max(0, root.rowHeight * 20)
+            reuseItems: true
             model: root.folder.model
             currentIndex: -1
             delegate: Line {

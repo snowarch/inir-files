@@ -127,9 +127,7 @@ fn handle(ctx: &Arc<Ctx>, req: Value) {
             if list.is_empty() && !path.as_os_str().is_empty() {
                 list.push(path.clone());
             }
-            for p in list {
-                ctx.thumbs.request(p, size.clone());
-            }
+            ctx.thumbs.request(list, &size, req["ahead"].as_bool().unwrap_or(false));
             Ok(json!({}))
         }
         // Slow (a PDF page takes a moment): drawn on its own thread, the answer comes when it is ready.

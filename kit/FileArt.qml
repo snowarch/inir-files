@@ -28,20 +28,23 @@ Item {
         text: "notes", code: "code", file: "draft", folder: "folder" })
     readonly property color kindTint: Theme.kindColor(root.kind)
 
+    // Only the face that shows is made: a grid of hundreds builds one each, not three.
+    Loader {
+        anchors.fill: parent
+        sourceComponent: root.tiny ? tinyArt : root.folder ? folderArt : pageArt
+    }
+
     // ---- small: the glyph alone
-    Glyph {
-        visible: root.tiny
+    Component { id: tinyArt; Item { Glyph {
         anchors.centerIn: parent
         size: root.size
         name: root.folder ? (root.roleGlyphs[root.role] && root.role !== "trash" ? "folder_special" : "folder") : (root.kindGlyphs[root.kind] ?? "draft")
         fill: 1
         color: root.folder ? Theme.folderFront : root.kindTint
-    }
+    } } }
 
     // ---- a folder
-    Item {
-        visible: !root.tiny && root.folder
-        anchors.fill: parent
+    Component { id: folderArt; Item {
         // Every edge on a whole pixel, so the sheets stay sharp at any size.
         readonly property real s: root.size
         readonly property real r: Math.max(2, Math.round(s * 0.085))
@@ -114,13 +117,11 @@ Item {
                 color: Theme.folderMark
             }
         }
-    }
+    } }
 
     // ---- a page
-    Item {
+    Component { id: pageArt; Item {
         id: page
-        visible: !root.tiny && !root.folder
-        anchors.fill: parent
         readonly property real s: root.size
         readonly property real w: Math.round(s * 0.72)
         readonly property real h: Math.round(s * 0.9)
@@ -183,11 +184,10 @@ Item {
                 color: Theme.luminance(root.kindTint) > 0.4 ? "#101114" : "#ffffff"
             }
         }
-    }
+    } }
 
     // A link carries an arrow; a broken one, a cross.
-    Rectangle {
-        visible: root.link && root.size >= 24
+    Loader { active: root.link && root.size >= 24; sourceComponent: Rectangle {
         width: Math.max(12, root.size * 0.28)
         height: width
         radius: width / 2
@@ -201,9 +201,8 @@ Item {
             weight: 600
             color: root.broken ? Theme.danger : Theme.ink
         }
-    }
-    Rectangle {
-        visible: root.locked && root.size >= 24
+    } }
+    Loader { active: root.locked && root.size >= 24; sourceComponent: Rectangle {
         width: Math.max(12, root.size * 0.28)
         height: width
         radius: width / 2
@@ -211,5 +210,5 @@ Item {
         y: root.size - height - root.size * 0.02
         color: Theme.raised
         Glyph { anchors.centerIn: parent; name: "lock"; size: parent.width * 0.66; fill: 1; color: Theme.ink2 }
-    }
+    } }
 }

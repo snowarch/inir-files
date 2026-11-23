@@ -9,7 +9,7 @@ use crate::util;
 use crate::Ctx;
 use md5::{Digest, Md5};
 use serde_json::json;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
@@ -20,13 +20,22 @@ struct Job {
     size: String,
 }
 
+// What waits, and a set of it so an ask need not walk the line. The far end goes when the line is full.
+#[derive(Default)]
+struct Line {
+    jobs: VecDeque<Job>,
+    held: HashSet<(PathBuf, String)>,
+}
+
+const LINE_CAP: usize = 8000;
+
 struct Thumbnailer {
     mimes: Vec<String>,
     exec: String,
 }
 
 pub struct Thumbs {
-    queue: Mutex<VecDeque<Job>>,
+    queue: Mutex<Line>,
     wake: Condvar,
     thumbnailers: Vec<Thumbnailer>,
     can: Mutex<HashMap<String, bool>>,
@@ -124,7 +133,7 @@ pub fn split_exec(exec: &str) -> Vec<String> {
 impl Thumbs {
     pub fn new() -> Self {
         Thumbs {
-            queue: Mutex::new(VecDeque::new()),
+            queue: Mutex::new(Line::default()),
             wake: Condvar::new(),
             thumbnailers: load_thumbnailers(),
             can: Mutex::new(HashMap::new()),
@@ -161,33 +170,58 @@ impl Thumbs {
         c
     }
 
-    pub fn request(&self, path: PathBuf, size: String) {
+    /// Asks for pictures. What is on screen goes to the head of the line, the newest first. Asked `ahead` (the rest of
+    /// a folder, before it is scrolled to), they go to the far end in the order given, and only when not already asked.
+    pub fn request(&self, paths: Vec<PathBuf>, size: &str, ahead: bool) {
         let mut q = self.queue.lock().unwrap();
-        if let Some(at) = q.iter().position(|j| j.path == path && j.size == size) {
-            q.remove(at);
+        for path in paths {
+            let key = (path, size.to_string());
+            if q.held.contains(&key) {
+                if ahead {
+                    continue;
+                }
+                if let Some(at) = q.jobs.iter().rposition(|j| j.path == key.0 && j.size == key.1) {
+                    let job = q.jobs.remove(at).unwrap();
+                    q.jobs.push_back(job);
+                }
+                continue;
+            }
+            let job = Job { path: key.0.clone(), size: key.1.clone() };
+            q.held.insert(key);
+            if ahead { q.jobs.push_front(job) } else { q.jobs.push_back(job) }
         }
-        q.push_back(Job { path, size });
-        while q.len() > 4000 {
-            q.pop_front();
+        while q.jobs.len() > LINE_CAP {
+            if let Some(j) = q.jobs.pop_front() {
+                q.held.remove(&(j.path, j.size));
+            }
         }
         drop(q);
-        self.wake.notify_one();
+        self.wake.notify_all();
     }
 
     pub fn clear(&self) {
-        self.queue.lock().unwrap().clear();
+        let mut q = self.queue.lock().unwrap();
+        q.jobs.clear();
+        q.held.clear();
     }
 }
 
+// A worker on every core but one, each at a lower priority than the interface: a folder of photos fills in fast, and
+// scrolling it never waits behind a picture being made. The tools a worker starts take its priority.
 pub fn start(ctx: Arc<Ctx>) {
-    let n = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(2, 6) - 1;
-    for _ in 0..n.max(2) {
+    let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+    for _ in 0..(cores.saturating_sub(1)).clamp(2, 12) {
         let ctx = ctx.clone();
         std::thread::spawn(move || loop {
+            unsafe {
+                let tid = libc::syscall(libc::SYS_gettid) as libc::id_t;
+                libc::setpriority(libc::PRIO_PROCESS, tid, 10);
+            }
             let job = {
                 let mut q = ctx.thumbs.queue.lock().unwrap();
                 loop {
-                    if let Some(j) = q.pop_back() {
+                    if let Some(j) = q.jobs.pop_back() {
+                        q.held.remove(&(j.path.clone(), j.size.clone()));
                         break j;
                     }
                     q = ctx.thumbs.wake.wait(q).unwrap();
@@ -224,19 +258,26 @@ fn fresh(thumb: &Path, mtime: i64) -> bool {
 }
 
 fn save_tagged(img: &image::DynamicImage, out: &Path, src: &Path, mtime: i64) -> bool {
-    let rgba = img.to_rgba8();
+    // A photo has no transparency: three channels write and read a quarter faster than four.
+    let (w, h, color, raw) = if img.color().has_alpha() {
+        let b = img.to_rgba8();
+        (b.width(), b.height(), png::ColorType::Rgba, b.into_raw())
+    } else {
+        let b = img.to_rgb8();
+        (b.width(), b.height(), png::ColorType::Rgb, b.into_raw())
+    };
     // Two asks for one thumbnail can meet: each writes its own file, the last rename wins whole.
     let tmp = out.with_extension(format!("{}-{}.tmp", std::process::id(), rand_suffix()));
     let write = || -> Result<(), Box<dyn std::error::Error>> {
         let file = fs::File::create(&tmp)?;
-        let mut enc = png::Encoder::new(std::io::BufWriter::new(file), rgba.width(), rgba.height());
-        enc.set_color(png::ColorType::Rgba);
+        let mut enc = png::Encoder::new(std::io::BufWriter::new(file), w, h);
+        enc.set_color(color);
         enc.set_depth(png::BitDepth::Eight);
         enc.set_compression(png::Compression::Fast);
         enc.add_text_chunk("Thumb::URI".into(), util::uri(src))?;
         enc.add_text_chunk("Thumb::MTime".into(), mtime.to_string())?;
         enc.add_text_chunk("Software".into(), "iNiR Files".into())?;
-        enc.write_header()?.write_image_data(rgba.as_raw())?;
+        enc.write_header()?.write_image_data(&raw)?;
         Ok(())
     };
     if let Some(dir) = out.parent() {
@@ -249,10 +290,36 @@ fn save_tagged(img: &image::DynamicImage, out: &Path, src: &Path, mtime: i64) ->
     false
 }
 
-fn orientation(path: &Path) -> u32 {
-    let Ok(f) = fs::File::open(path) else { return 1 };
-    let Ok(exif) = exif::Reader::new().read_from_container(&mut BufReader::new(f)) else { return 1 };
-    exif.get_field(exif::Tag::Orientation, exif::In::PRIMARY).and_then(|f| f.value.get_uint(0)).unwrap_or(1)
+/// The way a photo stands, and the small JPEG a camera keeps inside it (EXIF), read in one pass over its header.
+fn exif_of(path: &Path) -> (u32, Option<Vec<u8>>) {
+    let Ok(f) = fs::File::open(path) else { return (1, None) };
+    let Ok(exif) = exif::Reader::new().read_from_container(&mut BufReader::new(f)) else { return (1, None) };
+    let o = exif.get_field(exif::Tag::Orientation, exif::In::PRIMARY).and_then(|f| f.value.get_uint(0)).unwrap_or(1);
+    let at = exif.get_field(exif::Tag::JPEGInterchangeFormat, exif::In::THUMBNAIL).and_then(|f| f.value.get_uint(0));
+    let len = exif.get_field(exif::Tag::JPEGInterchangeFormatLength, exif::In::THUMBNAIL).and_then(|f| f.value.get_uint(0));
+    let small = at.zip(len).and_then(|(at, len)| exif.buf().get(at as usize..(at as usize).checked_add(len as usize)?)).map(<[u8]>::to_vec);
+    (o, small)
+}
+
+/// The camera's own small picture, when it covers the size and shows the whole photo: decoding it costs a fraction of
+/// the photo. One with another shape (bars added round a wide photo) is passed by.
+fn embedded(small: Option<Vec<u8>>, side: u32, whole: Option<imagesize::ImageSize>) -> Option<image::DynamicImage> {
+    let (small, whole) = (small?, whole?);
+    let mut dec = jpeg_decoder::Decoder::new(std::io::Cursor::new(small));
+    let pixels = dec.decode().ok()?;
+    let info = dec.info()?;
+    let (w, h) = (info.width as u32, info.height as u32);
+    if w.max(h) < side || w == 0 || h == 0 || whole.height == 0 {
+        return None;
+    }
+    if ((w as f64 / h as f64) - (whole.width as f64 / whole.height as f64)).abs() > 0.02 {
+        return None;
+    }
+    match info.pixel_format {
+        jpeg_decoder::PixelFormat::RGB24 => image::RgbImage::from_raw(w, h, pixels).map(image::DynamicImage::ImageRgb8),
+        jpeg_decoder::PixelFormat::L8 => image::GrayImage::from_raw(w, h, pixels).map(image::DynamicImage::ImageLuma8),
+        _ => None,
+    }
 }
 
 fn orient(img: image::DynamicImage, o: u32) -> image::DynamicImage {
@@ -269,7 +336,9 @@ fn orient(img: image::DynamicImage, o: u32) -> image::DynamicImage {
 }
 
 fn open_jpeg_scaled(path: &Path, side: u32) -> Option<image::DynamicImage> {
-    let mut dec = jpeg_decoder::Decoder::new(BufReader::new(fs::File::open(path).ok()?));
+    // Read whole: the decoder takes its bytes one at a time, and a slice serves them far faster than a file.
+    let bytes = fs::read(path).ok()?;
+    let mut dec = jpeg_decoder::Decoder::new(bytes.as_slice());
     let s = side.min(u16::MAX as u32) as u16;
     dec.scale(s, s).ok()?;
     let pixels = dec.decode().ok()?;
@@ -363,13 +432,11 @@ pub fn make(ctx: &Ctx, path: &Path, size: &str) -> Option<String> {
         if QT_DRAWS.contains(&mime.as_str()) && dims.map(|d| d.width as u32 <= side && d.height as u32 <= side).unwrap_or(false) {
             return Some(src);
         }
-        let img = if mime == "image/jpeg" { open_jpeg_scaled(path, side) } else { None }
+        let (o, small) = if mime == "image/jpeg" || mime == "image/tiff" || mime == "image/webp" { exif_of(path) } else { (1, None) };
+        let img = if mime == "image/jpeg" { embedded(small, side, dims).or_else(|| open_jpeg_scaled(path, side)) } else { None }
             .or_else(|| image::ImageReader::open(path).ok()?.with_guessed_format().ok()?.decode().ok());
         match img {
-            Some(img) => {
-                let o = if mime == "image/jpeg" || mime == "image/tiff" || mime == "image/webp" { orientation(path) } else { 1 };
-                save_tagged(&orient(fit(img, side), o), &out, path, mtime)
-            }
+            Some(img) => save_tagged(&orient(fit(img, side), o), &out, path, mtime),
             None => false,
         }
     } else if let Some(t) = ctx.thumbs.thumbnailer_for(&ctx.mime, &mime) {

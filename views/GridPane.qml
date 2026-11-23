@@ -11,6 +11,7 @@ Item {
     readonly property var sizes: [40, 56, 72, 96, 128, 176, 240]
     readonly property int zoom: Math.max(1, Math.min(root.sizes.length, Number(Prefs.get("zoom"))))
     readonly property real iconSize: Theme.dp(root.sizes[root.zoom - 1])
+    readonly property real grow: Theme.dp(12)
     readonly property real minCell: root.iconSize + Theme.dp(52)
     readonly property int columns: Math.max(1, Math.floor((grid.width - 1) / root.minCell))
     readonly property real labelHeight: Math.ceil(metrics.height * 2) + Theme.dp(10)
@@ -48,6 +49,16 @@ Item {
 
     FontMetrics { id: metrics; font.family: Theme.sans; font.pixelSize: Theme.body }
 
+    // The rest of the folder's pictures are made while the first screen is looked at, so a scroll finds them ready.
+    function ahead(): void {
+        const f = root.pane.folder
+        if (f.mode === "folder" && !f.remote) Core.thumbAhead(f.all, Core.thumbSize((root.iconSize + root.grow) * (root.Window.window?.devicePixelRatio ?? 1)))
+    }
+    Timer { id: aheadSoon; interval: 250; onTriggered: root.ahead() }
+    Connections { target: root.pane.folder; function onReset() { aheadSoon.restart() } }
+    Component.onCompleted: aheadSoon.restart()
+    onIconSizeChanged: aheadSoon.restart()
+
     Band {
         anchors.fill: parent
         pane: root.pane
@@ -68,11 +79,14 @@ Item {
         cellWidth: Math.floor(grid.width / root.columns)
         cellHeight: root.iconSize + Theme.dp(26) + root.labelHeight
         cacheBuffer: Math.max(0, grid.cellHeight * 2)
+        // Cells scrolled out are handed to the entries scrolling in, not made again.
+        reuseItems: true
         model: root.pane.folder.model
         currentIndex: -1
         delegate: Cell {
             pane: root.pane
             iconSize: root.iconSize
+            grow: root.grow
             width: grid.cellWidth
             height: grid.cellHeight
         }
