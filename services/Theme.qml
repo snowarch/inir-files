@@ -162,10 +162,9 @@ Singleton {
         }
     }
 
-    // ---- measure: Prism's own step under the density, so a page holds more at a calm size
+    // ---- measure: the sizes as drawn, the density on top
     readonly property real density: Prefs.density
-    readonly property real fine: 0.88
-    function dp(value: real): real { return Math.round(value * root.density * root.fine) }
+    function dp(value: real): real { return Math.round(value * root.density) }
     readonly property real radius: root.dp(12)
     readonly property real cardRadius: root.dp(18)
     readonly property real corner: root.dp(22)
@@ -176,14 +175,15 @@ Singleton {
     readonly property string title: root.typography.titleFont || root.sans
     readonly property string mono: root.typography.monospaceFont || "monospace"
     readonly property string glyphs: "Material Symbols Rounded"
-    // Whole pixels: a size between two is cut down to the lower one and drawn soft. 13 px reads at 1x on a desktop
-    // screen; nothing goes under 11. The shell's own size scale and the density sit on top.
-    function type(value: real): real { return Math.max(10, Math.round(value * root.density * root.sizeScale)) }
-    readonly property real caption: root.type(11)
-    readonly property real small: root.type(12)
-    readonly property real body: root.type(13)
-    readonly property real row: root.type(14)
-    readonly property real head: root.type(16)
+    // Whole pixels: a size between two is cut down to the lower one and drawn soft. The steps sit one under the shell's
+    // own (15 px for its labels at 1x), so a list holds more and still reads beside it; nothing goes under 11. The
+    // shell's size scale and the density sit on top.
+    function type(value: real): real { return Math.max(11, Math.round(value * root.density * root.sizeScale)) }
+    readonly property real caption: root.type(12)
+    readonly property real small: root.type(13)
+    readonly property real body: root.type(14)
+    readonly property real row: root.type(15)
+    readonly property real head: root.type(17)
     readonly property real titleSize: root.type(22)
     readonly property real display: root.type(30)
 

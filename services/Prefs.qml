@@ -36,8 +36,9 @@ Singleton {
         restoreTabs: true,
         typeAhead: true
     })
-    property var values: ({})
-    property var state: ({})
+    // Read as the app starts (the files block until loaded), so the first window opens with them.
+    property var values: root.parse(settingsFile.text())
+    property var state: root.parse(stateFile.text())
 
     function get(key: string): var { return root.values[key] !== undefined ? root.values[key] : root.defaults[key] }
     function set(key: string, value: var): void {
@@ -69,6 +70,7 @@ Singleton {
         watchChanges: true
         printErrors: false
         atomicWrites: true
+        blockLoading: true
         onFileChanged: reload()
         onLoaded: root.values = root.parse(text())
     }
@@ -77,6 +79,7 @@ Singleton {
         path: root.stateDir + "/state.json"
         printErrors: false
         atomicWrites: true
+        blockLoading: true
         onLoaded: root.state = root.parse(text())
     }
     Timer {

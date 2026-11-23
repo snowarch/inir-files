@@ -14,9 +14,22 @@ FloatingWindow {
 
     title: (root.currentPage ? root.currentPage.title + " — " : "") + I18n.tr("Files")
     color: Theme.rail
-    implicitWidth: Math.round(Theme.dp(1240))
-    implicitHeight: Math.round(Theme.dp(800))
-    minimumSize: Qt.size(Theme.dp(620), Theme.dp(420))
+    // The size is the window's own, never the density's: it opens as it was last left, and only the person or the
+    // compositor changes it.
+    implicitWidth: 1240
+    implicitHeight: 800
+    minimumSize: Qt.size(560, 400)
+    onWidthChanged: keepSize.restart()
+    onHeightChanged: keepSize.restart()
+    Timer {
+        id: keepSize
+        interval: 800
+        onTriggered: {
+            const w = stageItem.Window.window
+            if (!w || w.visibility === Window.Maximized || w.visibility === Window.FullScreen || root.width < 560 || root.height < 400) return
+            Prefs.remember("window", { w: Math.round(root.width), h: Math.round(root.height) })
+        }
+    }
 
     readonly property Item stage: stageItem
     readonly property bool windowActive: stageItem.Window.active
@@ -113,6 +126,8 @@ FloatingWindow {
     }
 
     Component.onCompleted: {
+        const size = Prefs.recall("window", null)
+        if (size && size.w >= 560 && size.h >= 400) { root.implicitWidth = size.w; root.implicitHeight = size.h }
         const saved = root.restoreTabs && root.startPath.length === 0 && Prefs.get("restoreTabs") ? Prefs.recall("tabs", null) : null
         if (saved && saved.paths && saved.paths.length > 0) {
             for (const p of saved.paths) root.newTab(p)

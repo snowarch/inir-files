@@ -184,7 +184,7 @@ Item {
         Timer {
             interval: 650
             running: placeMouse.containsMouse && (place.it.detail ?? "").length > 0
-            onTriggered: place.QsWindow.window?.tips?.show(place, place.it.detail, "")
+            onTriggered: place.QsWindow.window?.tips?.show(place, place.it.detail, "", true)
         }
         Connections {
             target: placeMouse

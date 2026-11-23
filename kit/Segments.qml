@@ -9,7 +9,7 @@ Inset {
     property var value
     signal chosen(var value)
     radius: height / 2
-    implicitHeight: Theme.dp(32)
+    implicitHeight: Theme.dp(34)
     implicitWidth: row.implicitWidth + Theme.dp(6)
 
     readonly property int index: root.options.findIndex(o => o.value === root.value)
@@ -38,17 +38,17 @@ Inset {
                 required property var modelData
                 required property int index
                 readonly property bool on: root.index === seg.index
-                width: content.implicitWidth + Theme.dp(seg.modelData.text ? 22 : 16)
+                width: content.implicitWidth + Theme.dp(seg.modelData.text ? 26 : 18)
                 height: root.height - Theme.dp(6)
                 Row {
                     id: content
                     anchors.centerIn: parent
-                    spacing: Theme.dp(5)
+                    spacing: Theme.dp(6)
                     Glyph {
                         visible: !!seg.modelData.glyph
                         anchors.verticalCenter: parent.verticalCenter
                         name: seg.modelData.glyph ?? ""
-                        size: Theme.dp(17)
+                        size: Theme.dp(18)
                         color: seg.on ? Theme.ink : Theme.ink2
                         fill: seg.on ? 1 : 0
                     }
@@ -56,7 +56,7 @@ Inset {
                         visible: !!seg.modelData.text
                         anchors.verticalCenter: parent.verticalCenter
                         text: seg.modelData.text ?? ""
-                        size: Theme.small
+                        size: Theme.body
                         strong: seg.on
                         color: seg.on ? Theme.ink : Theme.ink2
                     }
