@@ -176,7 +176,10 @@ Item {
         flickableDirection: Flickable.HorizontalFlick
         boundsBehavior: Flickable.StopAtBounds
         acceptedButtons: Qt.NoButton
-        onContentWidthChanged: Qt.callLater(() => strip.contentX = Math.max(0, strip.contentWidth - strip.width))
+        // The folder in view stays in view: as a column opens, and as the window or the aside changes its width.
+        function toEnd(): void { strip.contentX = Math.max(0, strip.contentWidth - strip.width) }
+        onContentWidthChanged: Qt.callLater(strip.toEnd)
+        onWidthChanged: Qt.callLater(strip.toEnd)
         QQC.ScrollBar.horizontal: Scroller { orientation: Qt.Horizontal }
 
         Item {
