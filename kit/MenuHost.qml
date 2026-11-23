@@ -11,12 +11,16 @@ FocusScope {
     visible: root.levels.length > 0
     z: 900
 
-    property var levels: []        // [{ entries, x, y, current }]
+    // The open cards and the row each points at, kept apart: a card's rows are made again only when its entries change,
+    // so hovering a row never rebuilds the row under the pointer (that ate the click).
+    property var levels: []        // [{ entries, x, y, beside }]
+    property var currents: []      // the pointed row of each level, -1 for none
     property Item returnFocus: null
 
     function open(entries: var, x: real, y: real): void {
         root.returnFocus = root.Window.window?.activeFocusItem ?? null
-        root.levels = [{ entries: entries.filter(e => e), x: x, y: y, current: -1 }]
+        root.levels = [{ entries: entries.filter(e => e), x: x, y: y }]
+        root.currents = [-1]
         root.forceActiveFocus()
     }
     function openAt(entries: var, item: Item, below: bool): void {
@@ -25,21 +29,24 @@ FocusScope {
     }
     function close(): void {
         root.levels = []
+        root.currents = []
         if (root.returnFocus) root.returnFocus.forceActiveFocus()
     }
     function setCurrent(level: int, index: int): void {
-        const l = root.levels.slice(0, level + 1)
-        l[level] = Object.assign({}, l[level], { current: index })
-        root.levels = l
+        if (root.currents[level] === index) return
+        if (root.levels.length > level + 1) root.levels = root.levels.slice(0, level + 1)
+        const c = root.currents.slice(0, level + 1)
+        c[level] = index
+        root.currents = c
     }
     function openSub(level: int, index: int, rowItem: Item): void {
         const e = root.levels[level].entries[index]
-        if (!e?.sub) return
+        if (!e?.sub || root.levels.length > level + 1 && root.currents[level] === index) return
         const p = rowItem.mapToItem(root, rowItem.width + Theme.dp(4), -Theme.dp(6))
-        const l = root.levels.slice(0, level + 1)
-        l[level] = Object.assign({}, l[level], { current: index })
-        l.push({ entries: e.sub.filter(s => s), x: p.x, y: p.y, current: -1, beside: rowItem.mapToItem(root, -Theme.dp(4), 0).x })
-        root.levels = l
+        root.levels = root.levels.slice(0, level + 1).concat([{ entries: e.sub.filter(s => s), x: p.x, y: p.y, beside: rowItem.mapToItem(root, -Theme.dp(4), 0).x }])
+        const c = root.currents.slice(0, level + 1)
+        c[level] = index
+        root.currents = c.concat([-1])
     }
     function activate(level: int, index: int): void {
         const e = root.levels[level]?.entries[index]
@@ -52,7 +59,7 @@ FocusScope {
     function step(dir: int): void {
         const level = root.levels.length - 1
         const l = root.levels[level]
-        let i = l.current
+        let i = root.currents[level] ?? -1
         for (let n = 0; n < l.entries.length; n++) {
             i = (i + dir + l.entries.length) % l.entries.length
             if (root.selectable(l.entries[i])) break
@@ -64,15 +71,16 @@ FocusScope {
         const level = root.levels.length - 1
         if (level < 0) return
         const l = root.levels[level]
+        const cur = root.currents[level] ?? -1
         if (event.key === Qt.Key_Escape || event.key === Qt.Key_Left && level > 0) {
-            if (level > 0) root.levels = root.levels.slice(0, level)
+            if (level > 0) { root.levels = root.levels.slice(0, level); root.currents = root.currents.slice(0, level) }
             else root.close()
         } else if (event.key === Qt.Key_Down) root.step(1)
         else if (event.key === Qt.Key_Up) root.step(-1)
         else if (event.key === Qt.Key_Right || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-            const e = l.entries[l.current]
-            if (e?.sub) root.openSub(level, l.current, cards.itemAt(level).rowAt(l.current))
-            else if (event.key !== Qt.Key_Right) root.activate(level, l.current)
+            const e = l.entries[cur]
+            if (e?.sub) root.openSub(level, cur, cards.itemAt(level).rowAt(cur))
+            else if (event.key !== Qt.Key_Right) root.activate(level, cur)
         }
         event.accepted = true
     }
@@ -88,15 +96,21 @@ FocusScope {
 
     Repeater {
         id: cards
-        model: root.levels.length
+        model: 4                   // a card per level, made once; a card shows while its level is open
         delegate: Item {
             id: card
             required property int index
-            readonly property var level: root.levels[card.index] ?? ({ entries: [] })
-            readonly property bool anyGlyph: card.level.entries.some(e => e.glyph || e.icon || e.checked !== undefined)
+            readonly property var level: root.levels[card.index] ?? ({ entries: [], x: 0, y: 0 })
+            property var entries: []
+            onLevelChanged: if (card.level.entries !== card.entries) {
+                card.entries = card.level.entries
+                if (card.entries.length > 0) appear.restart()
+            }
+            visible: card.entries.length > 0
+            readonly property bool anyGlyph: card.entries.some(e => e.glyph || e.icon || e.checked !== undefined)
             readonly property real need: {
                 let w = 0
-                for (const e of card.level.entries) {
+                for (const e of card.entries) {
                     const t = metrics.advanceWidth(e.text ?? e.header ?? "") + (e.keys ? metrics.advanceWidth(e.keys) + Theme.dp(28) : 0) + (e.sub ? Theme.dp(22) : 0)
                     w = Math.max(w, t)
                 }
@@ -113,12 +127,12 @@ FocusScope {
             y: Math.max(Theme.dp(6), Math.min(card.level.y, root.height - height - Theme.dp(6)))
             function rowAt(i: int): Item { return rows.itemAt(i) }
 
-            opacity: 0
-            scale: 0.97
-            Component.onCompleted: { opacity = 1; scale = 1 }
-            Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Easing.OutCubic } }
-            Behavior on scale { NumberAnimation { duration: Theme.fast; easing.type: Easing.OutCubic } }
             transformOrigin: Item.TopLeft
+            ParallelAnimation {
+                id: appear
+                NumberAnimation { target: card; property: "opacity"; from: 0; to: 1; duration: Theme.fast; easing.type: Easing.OutCubic }
+                NumberAnimation { target: card; property: "scale"; from: 0.97; to: 1; duration: Theme.fast; easing.type: Easing.OutCubic }
+            }
 
             RectangularShadow {
                 anchors.fill: bg
@@ -144,14 +158,14 @@ FocusScope {
                 width: parent.width - Theme.dp(12)
                 Repeater {
                     id: rows
-                    model: card.level.entries
+                    model: card.entries
                     delegate: Item {
                         id: row
                         required property var modelData
                         required property int index
                         readonly property bool sep: !!row.modelData.separator
                         readonly property bool header: row.modelData.header !== undefined
-                        readonly property bool on: card.level.current === row.index
+                        readonly property bool on: (root.currents[card.index] ?? -1) === row.index
                         readonly property bool usable: row.modelData.enabled !== false
                         width: col.width
                         height: row.sep ? Theme.dp(9) : row.header ? Theme.dp(26) : Theme.dp(32)
