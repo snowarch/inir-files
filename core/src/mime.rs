@@ -215,20 +215,22 @@ impl MimeDb {
         (icon, generic)
     }
 
-    /// What a person calls the type: "PNG image", "imagen PNG".
+    /// What a person calls the type: "PNG image", "imagen PNG". An alias reads its type's words, a type the database
+    /// does not describe reads its nearest ancestor's ("Python script" falls back to "plain text"), and a type with
+    /// neither is "unknown", never blank.
     pub fn comment(&self, mime: &str) -> String {
         if let Some(c) = self.comments.lock().unwrap().get(mime) {
             return c.clone();
         }
-        let mut found = String::new();
-        for dir in crate::util::data_dirs() {
-            if let Ok(xml) = fs::read_to_string(dir.join("mime").join(format!("{mime}.xml"))) {
-                found = pick_comment(&xml, &self.lang);
-                if !found.is_empty() {
-                    break;
-                }
-            }
-        }
+        let read = |m: &str| {
+            crate::util::data_dirs().iter().find_map(|dir| {
+                let xml = fs::read_to_string(dir.join("mime").join(format!("{m}.xml"))).ok()?;
+                Some(pick_comment(&xml, &self.lang)).filter(|c| !c.is_empty())
+            })
+        };
+        let mut lineage = self.lineage(mime);
+        lineage.push("application/octet-stream".into());
+        let found = lineage.iter().find_map(|m| read(m)).unwrap_or_default();
         self.comments.lock().unwrap().insert(mime.to_string(), found.clone());
         found
     }
@@ -336,6 +338,28 @@ fn unescape(s: &str) -> String {
     s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
 }
 
+/// What an ELF file is. A program built as PIE is a shared object (e_type 3) like a library; the interpreter it asks
+/// for (a PT_INTERP program header) is what makes it a program, as file(1) tells them apart.
+fn elf(b: &[u8]) -> &'static str {
+    let wide = b.get(4) == Some(&2);
+    let little = b.get(5) != Some(&2);
+    let num = |at: usize, len: usize| -> Option<u64> {
+        let s = b.get(at..at + len)?;
+        Some(if little { s.iter().rev().fold(0, |n, &x| n << 8 | x as u64) } else { s.iter().fold(0, |n, &x| n << 8 | x as u64) })
+    };
+    let interp = || -> Option<bool> {
+        let (off, size, count) = if wide { (num(0x20, 8)?, num(0x36, 2)?, num(0x38, 2)?) } else { (num(0x1c, 4)?, num(0x2a, 2)?, num(0x2c, 2)?) };
+        // The headers past the bytes read are not looked at: a program puts them first, right after the ELF header.
+        Some((0..count).map(|i| (off + i * size) as usize).take_while(|&at| at + 4 <= b.len()).any(|at| num(at, 4) == Some(3)))
+    };
+    match num(16, 2) {
+        Some(1) => "application/x-object",
+        Some(3) if interp() != Some(true) => "application/x-sharedlib",
+        Some(4) => "application/x-core",
+        _ => "application/x-executable",
+    }
+}
+
 /// A file without a name that says what it is, told by its first bytes.
 fn sniff(path: &Path) -> String {
     let mut head = [0u8; 512];
@@ -343,9 +367,7 @@ fn sniff(path: &Path) -> String {
     let b = &head[..n];
     let starts = |m: &[u8]| b.starts_with(m);
     let mime = if starts(b"\x7fELF") {
-        // e_type 3 is a shared object, which a PIE program also is; an interpreter section tells them apart, but an
-        // executable bit is what the person cares about.
-        if b.len() > 17 && b[16] == 2 { "application/x-executable" } else { "application/x-pie-executable" }
+        elf(b)
     } else if starts(b"#!") {
         let line = String::from_utf8_lossy(&b[..b.iter().position(|&c| c == b'\n').unwrap_or(b.len())]).to_string();
         if line.contains("python") {
@@ -402,6 +424,37 @@ fn sniff(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // A 64-bit little-endian ELF header of the given e_type, its program headers right after it.
+    fn elf_head(e_type: u8, headers: &[u32]) -> Vec<u8> {
+        let mut b = vec![0u8; 64 + 56 * headers.len()];
+        b[..6].copy_from_slice(b"\x7fELF\x02\x01");
+        b[16] = e_type;
+        b[0x20] = 64;
+        b[0x36] = 56;
+        b[0x38] = headers.len() as u8;
+        for (i, t) in headers.iter().enumerate() {
+            b[64 + 56 * i..68 + 56 * i].copy_from_slice(&t.to_le_bytes());
+        }
+        b
+    }
+
+    #[test]
+    fn elf_programs_and_libraries() {
+        assert_eq!(elf(&elf_head(2, &[1])), "application/x-executable");
+        assert_eq!(elf(&elf_head(3, &[6, 3, 1])), "application/x-executable");
+        assert_eq!(elf(&elf_head(3, &[1, 2])), "application/x-sharedlib");
+        assert_eq!(elf(&elf_head(1, &[])), "application/x-object");
+    }
+
+    #[test]
+    fn every_type_has_words() {
+        let db = MimeDb::load();
+        // An alias reads its type's words; a type with none of its own, its parent's.
+        assert_eq!(db.comment("application/x-shellscript"), db.comment("text/x-shellscript"));
+        assert!(!db.comment("application/x-shellscript").is_empty());
+        assert!(!db.comment("application/x-made-up-type").is_empty());
+    }
 
     #[test]
     fn globs() {
