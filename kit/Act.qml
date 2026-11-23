@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import qs.services
 
 // A glyph button: quiet until pointed at; on, it sits on the accent's plate.
@@ -48,7 +49,7 @@ Item {
     Timer {
         interval: 650
         running: root.hovered && root.tip.length > 0 && !mouse.pressed
-        onTriggered: root.Window.window?.tips?.show(root, root.tip, root.keys)
+        onTriggered: root.QsWindow.window?.tips?.show(root, root.tip, root.keys)
     }
-    onHoveredChanged: if (!root.hovered) root.Window.window?.tips?.hide(root)
+    onHoveredChanged: if (!root.hovered) root.QsWindow.window?.tips?.hide(root)
 }

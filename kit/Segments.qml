@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import qs.services
 
 // One choice of a few, side by side in a pressed track; the chosen one raised.
@@ -70,11 +71,11 @@ Inset {
                 Timer {
                     interval: 650
                     running: segMouse.containsMouse && !!seg.modelData.tip
-                    onTriggered: seg.Window.window?.tips?.show(seg, seg.modelData.tip, seg.modelData.keys ?? "")
+                    onTriggered: seg.QsWindow.window?.tips?.show(seg, seg.modelData.tip, seg.modelData.keys ?? "")
                 }
                 Connections {
                     target: segMouse
-                    function onContainsMouseChanged() { if (!segMouse.containsMouse) seg.Window.window?.tips?.hide(seg) }
+                    function onContainsMouseChanged() { if (!segMouse.containsMouse) seg.QsWindow.window?.tips?.hide(seg) }
                 }
             }
         }
