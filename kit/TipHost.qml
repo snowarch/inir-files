@@ -24,7 +24,15 @@ Item {
         root.above = item.mapToItem(root, 0, 0).y - Theme.dp(6)
         tip.shown = true
     }
-    function hide(item: Item): void { if (!item || item === root.target) tip.shown = false }
+    function hide(item: Item): void {
+        if (item && item !== root.target) return
+        if (tip.shown) cool.restart()
+        tip.shown = false
+    }
+    // Warm right after a tip: the next control's tip comes at once and the tip glides over to it.
+    readonly property bool warm: tip.shown || cool.running
+    readonly property int delay: root.warm ? 60 : 650
+    Timer { id: cool; interval: 600 }
 
     Rectangle {
         id: tip
@@ -39,6 +47,9 @@ Item {
         opacity: shown ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: Theme.fast } }
+        Behavior on x { enabled: tip.visible; NumberAnimation { duration: Theme.fast; easing.type: Easing.OutCubic } }
+        Behavior on y { enabled: tip.visible; NumberAnimation { duration: Theme.fast; easing.type: Easing.OutCubic } }
+        Behavior on width { enabled: tip.visible; NumberAnimation { duration: Theme.fast; easing.type: Easing.OutCubic } }
         Row {
             id: row
             anchors.centerIn: parent

@@ -66,10 +66,11 @@ Inset {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
+                    onPressed: seg.QsWindow.window?.tips?.hide(seg)
                     onClicked: root.chosen(seg.modelData.value)
                 }
                 Timer {
-                    interval: 650
+                    interval: seg.QsWindow.window?.tips?.delay ?? 650
                     running: segMouse.containsMouse && !!seg.modelData.tip
                     onTriggered: seg.QsWindow.window?.tips?.show(seg, seg.modelData.tip, seg.modelData.keys ?? "")
                 }

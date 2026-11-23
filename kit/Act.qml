@@ -42,12 +42,13 @@ Item {
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
         cursorShape: Qt.PointingHandCursor
+        onPressed: root.QsWindow.window?.tips?.hide(root)
         onClicked: m => root.clicked(m)
         onPressAndHold: root.pressAndHold()
     }
     // The tip after a still moment over the button.
     Timer {
-        interval: 650
+        interval: root.QsWindow.window?.tips?.delay ?? 650
         running: root.hovered && root.tip.length > 0 && !mouse.pressed
         onTriggered: root.QsWindow.window?.tips?.show(root, root.tip, root.keys)
     }

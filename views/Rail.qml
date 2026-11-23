@@ -352,13 +352,14 @@ Item {
         }
         // The room on a disk shows in the window's tip, over the rows, never under the row below.
         Timer {
-            interval: 650
-            running: placeMouse.containsMouse && (place.it.detail ?? "").length > 0
+            interval: place.QsWindow.window?.tips?.delay ?? 650
+            running: placeMouse.containsMouse && !placeMouse.pressed && (place.it.detail ?? "").length > 0
             onTriggered: place.QsWindow.window?.tips?.show(place, place.it.detail, "", true)
         }
         Connections {
             target: placeMouse
             function onContainsMouseChanged() { if (!placeMouse.containsMouse) place.QsWindow.window?.tips?.hide(place) }
+            function onPressedChanged() { if (placeMouse.pressed) place.QsWindow.window?.tips?.hide(place) }
         }
     }
 
