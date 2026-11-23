@@ -44,7 +44,15 @@ Item {
         case "kind": return root.comment.length > 0 ? root.comment : root.model.kind
         case "origin": return Fmt.pretty(Fmt.parent(root.origin))
         case "deleted": return Fmt.when(root.deleted)
-        case "where": return Fmt.pretty(Fmt.parent(root.path))
+        case "where": {
+            // Below the place searched, the way down from it reads shorter than the whole path.
+            const dir = Fmt.parent(root.path)
+            const top = root.folder.searchRoot
+            if (root.folder.mode !== "search" || top.length === 0 || (dir !== top && !dir.startsWith(top.endsWith("/") ? top : top + "/"))) return Fmt.pretty(dir)
+            const head = top === "/" ? "/" : Fmt.name(top)
+            const rest = dir.slice(top.length).replace(/^\//, "")
+            return rest.length === 0 ? head : (head.endsWith("/") ? head : head + "/") + rest
+        }
         case "snippet": return root.snippet
         }
         return ""
