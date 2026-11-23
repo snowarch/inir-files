@@ -32,6 +32,17 @@ Item {
         if (root.folder && root.folder.mode === "search") root.folder.stopSearch(true)
         if (root.pane) root.pane.forceActiveFocus()
     }
+    // The places one way, nearest first, under the button: a pick goes straight there.
+    function history(way: int, from: Item): void {
+        const f = root.folder
+        const page = root.browser.currentPage
+        if (!f || !page) return
+        const places = way < 0 ? f.back.slice().reverse() : f.forward
+        root.browser.menus.openAt(places.slice(0, 16).map((p, i) => {
+            const like = p.endsWith(":") ? { mode: p.slice(0, -1), path: "", query: "" } : { mode: "folder", path: p, query: "" }
+            return { text: page.titleOf(like), glyph: page.glyphOf(like), run: () => f.travel(way * (i + 1)) }
+        }), from, true)
+    }
     function backspaceSearch(): void {
         search.text = search.text.slice(0, -1)
         if (search.text.length === 0) root.clearSearch()
@@ -78,19 +89,26 @@ Item {
             on: root.browser.railOpen
             onClicked: root.browser.toggleRail()
         }
+        // A middle click opens the place in a new tab; a right click or a long press lists the places that way.
         Act {
+            id: backAct
             glyph: "arrow_back"
             tip: I18n.tr("Back")
             keys: "Alt+←"
+            menu: true
             enabled: root.folder && root.folder.back.length > 0
-            onClicked: root.folder.goBack()
+            onClicked: m => { if (m.button === Qt.MiddleButton) root.browser.newTab(root.folder.back[root.folder.back.length - 1]); else root.folder.goBack() }
+            onMenuRequested: root.history(-1, backAct)
         }
         Act {
+            id: forwardAct
             glyph: "arrow_forward"
             tip: I18n.tr("Forward")
             keys: "Alt+→"
+            menu: true
             enabled: root.folder && root.folder.forward.length > 0
-            onClicked: root.folder.goForward()
+            onClicked: m => { if (m.button === Qt.MiddleButton) root.browser.newTab(root.folder.forward[0]); else root.folder.goForward() }
+            onMenuRequested: root.history(1, forwardAct)
         }
         Act {
             glyph: "arrow_upward"

@@ -13,9 +13,12 @@ Item {
     property real glyphSize: Theme.dp(19)
     property color tint: root.on ? Theme.accentInk : Theme.ink2
     property bool round: false
+    // More behind the button (the places back, say): a right click or a long press asks for it.
+    property bool menu: false
     readonly property bool hovered: mouse.containsMouse
     signal clicked(var mouse)
     signal pressAndHold()
+    signal menuRequested()
 
     implicitWidth: root.size
     implicitHeight: root.size
@@ -40,11 +43,11 @@ Item {
         id: mouse
         anchors.fill: parent
         hoverEnabled: true
-        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+        acceptedButtons: root.menu ? Qt.LeftButton | Qt.MiddleButton | Qt.RightButton : Qt.LeftButton | Qt.MiddleButton
         cursorShape: Qt.PointingHandCursor
         onPressed: { root.spent = true; root.QsWindow.window?.tips?.hide(root) }
-        onClicked: m => root.clicked(m)
-        onPressAndHold: root.pressAndHold()
+        onClicked: m => { if (m.button === Qt.RightButton) root.menuRequested(); else root.clicked(m) }
+        onPressAndHold: { if (root.menu) root.menuRequested(); root.pressAndHold() }
     }
     // The tip after a still moment over the button; once pressed, not again until the pointer comes back, so it never
     // lies over the menu or sheet the press opened.

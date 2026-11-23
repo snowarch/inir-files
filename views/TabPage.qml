@@ -10,6 +10,7 @@ Item {
     property bool split: false
     property real ratio: 0.5
     property var activePane: first
+    readonly property var panes: root.split ? [first, second] : [first]
     readonly property string title: root.titleOf(root.activePane.folder)
     readonly property string glyph: root.glyphOf(root.activePane.folder)
 
@@ -70,7 +71,8 @@ Item {
                 strong: strip.pane.active
                 color: strip.pane.active ? Theme.ink : Theme.ink3
                 elide: Text.ElideMiddle
-                width: Math.min(implicitWidth, strip.width - Theme.dp(60))
+                // Clear of the close button: the row's start (50) and the button with its margins (38).
+                width: Math.min(implicitWidth, strip.width - Theme.dp(88))
             }
         }
         Act {

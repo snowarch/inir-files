@@ -10,6 +10,7 @@ Item {
     required property var pane
     readonly property var folder: root.pane.folder
     readonly property alias view: current
+    readonly property bool sideways: true
     // The list's zoom steps size the columns too.
     readonly property int zoom: Math.max(0, Math.min(2, Number(Prefs.get("listZoom"))))
     readonly property real colWidth: Theme.dp([228, 252, 292][root.zoom])

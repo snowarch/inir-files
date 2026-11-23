@@ -98,6 +98,11 @@ FloatingWindow {
         if (root.tabs.length > 1) root.tabIndex = (root.tabIndex + d + root.tabs.length) % root.tabs.length
     }
     function focusPane(): void { if (root.activePane) root.activePane.forceActiveFocus() }
+    // The pane under a point of `item`; over neither, the active one, or null when `exact`.
+    function paneAt(item: Item, x: real, y: real, exact: bool): var {
+        for (const p of root.currentPage ? root.currentPage.panes : []) if (p.contains(p.mapFromItem(item, x, y))) return p
+        return exact ? null : root.activePane
+    }
     onTabIndexChanged: Qt.callLater(root.focusPane)
     onCurrentPageChanged: saveTabs.restart()
 
@@ -247,17 +252,7 @@ FloatingWindow {
             Rail { id: rail; browser: root; anchors.fill: parent }
         }
 
-        // The mouse's own back and forward buttons.
-        MouseArea {
-            anchors.fill: parent
-            z: 600
-            acceptedButtons: Qt.BackButton | Qt.ForwardButton
-            onClicked: mouse => {
-                if (!root.activePane || root.busy) return
-                if (mouse.button === Qt.BackButton) root.activePane.folder.goBack()
-                else root.activePane.folder.goForward()
-            }
-        }
+        Travel { browser: root; anchors.fill: parent; z: 600 }
 
         ToastBar {
             anchors.horizontalCenter: canvas.horizontalCenter
@@ -300,8 +295,8 @@ FloatingWindow {
     Key { sequence: "Ctrl+Shift+Tab"; always: true; onActivated: root.stepTab(-1) }
     Key { sequence: "Ctrl+PgDown"; always: true; onActivated: root.stepTab(1) }
     Key { sequence: "Ctrl+PgUp"; always: true; onActivated: root.stepTab(-1) }
-    Key { sequence: "Alt+Left"; always: true; onActivated: root.pane.folder.goBack() }
-    Key { sequence: "Alt+Right"; always: true; onActivated: root.pane.folder.goForward() }
+    Key { sequences: ["Alt+Left", "Back"]; always: true; onActivated: root.pane.folder.goBack() }
+    Key { sequences: ["Alt+Right", "Forward"]; always: true; onActivated: root.pane.folder.goForward() }
     Key { sequence: "Alt+Up"; always: true; onActivated: root.pane.folder.goUp() }
     Key { sequence: "Alt+Home"; always: true; onActivated: root.pane.folder.go(Core.places.home || Core.home) }
     Key { sequence: "Ctrl+Shift+N"; onActivated: root.actions.newFolder(root.pane) }

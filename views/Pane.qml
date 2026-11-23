@@ -12,6 +12,8 @@ FocusScope {
     readonly property bool active: root.browser.activePane === root
     property string viewMode: Prefs.get("view")
     readonly property Item view: loader.item ? loader.item.view : null
+    // The view scrolls sideways itself (columns, a list wider than the pane): a sideways swipe is its own.
+    readonly property bool sideways: loader.item?.sideways ?? false
     property bool dropHover: false
     property int narrowOnRelease: -1
     property string typed: ""
@@ -128,8 +130,11 @@ FocusScope {
             return
         }
         if (k === Qt.Key_Return || k === Qt.Key_Enter) { root.openSelection(ctrl || shift); event.accepted = true; return }
+        // Backspace goes back, as in other file managers; with nowhere back, up. Typed letters lose their last first.
         if (k === Qt.Key_Backspace) {
-            if (f.mode === "search") root.browser.head.backspaceSearch()
+            if (root.typed.length > 0) { root.typed = root.typed.slice(0, -1); typing.restart() }
+            else if (f.mode === "search") root.browser.head.backspaceSearch()
+            else if (f.back.length > 0) f.goBack()
             else f.goUp()
             event.accepted = true
             return

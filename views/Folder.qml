@@ -81,7 +81,9 @@ Item {
     function indexOf(path: string): int { return root.at[path] ?? -1 }
 
     // ---- going places
-    function go(target: string, remember: bool): void {
+    // `remember` false leaves the history as it is (a tab's first place). It is not typed bool: a typed parameter left
+    // out arrives as false, and every plain go() then forgot where it came from.
+    function go(target: string, remember: var): void {
         if (remember !== false && target !== root.place) {
             root.back = root.back.concat([root.place]).slice(-80)
             root.forward = []
@@ -102,20 +104,32 @@ Item {
         root.anchor = -1
         root.load(false)
     }
-    function goBack(): void {
-        if (root.back.length === 0) return
-        const to = root.back[root.back.length - 1]
-        root.forward = [root.place].concat(root.forward)
-        root.back = root.back.slice(0, -1)
-        root.focusPath = ""
+    // Steps through the history: a negative count goes that many places back, a positive one forward. Arriving at a
+    // folder above the one left, the folder on the way down is the current one, as going up does.
+    function travel(n: int): void {
+        const steps = Math.abs(n)
+        if (steps === 0 || steps > (n < 0 ? root.back : root.forward).length) return
+        const from = root.place
+        let to = ""
+        if (n < 0) {
+            const k = root.back.length - steps
+            to = root.back[k]
+            root.forward = root.back.slice(k + 1).concat([from], root.forward)
+            root.back = root.back.slice(0, k)
+        } else {
+            to = root.forward[steps - 1]
+            root.back = root.back.concat([from], root.forward.slice(0, steps - 1)).slice(-80)
+            root.forward = root.forward.slice(steps)
+        }
+        root.focusPath = root.mode === "folder" ? root.childToward(root.path, to) : ""
         root.enter(to)
     }
-    function goForward(): void {
-        if (root.forward.length === 0) return
-        const to = root.forward[0]
-        root.back = root.back.concat([root.place])
-        root.forward = root.forward.slice(1)
-        root.enter(to)
+    function goBack(): void { root.travel(-1) }
+    function goForward(): void { root.travel(1) }
+    // The entry of folder `top` on the way down to `path`, or "" when `path` is not under it.
+    function childToward(path: string, top: string): string {
+        const t = top.endsWith("/") ? top : top + "/"
+        return path.startsWith(t) && path.length > t.length ? t + path.slice(t.length).split("/")[0] : ""
     }
     function goUp(): void {
         if (root.mode !== "folder" || root.path === "/") return
