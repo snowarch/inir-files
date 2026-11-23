@@ -27,10 +27,14 @@ Item {
     readonly property var defaults: ({ size: 132, mtime: 176, kind: 190, origin: 240, deleted: 150, where: 260, snippet: 320 })
     property var widths: Prefs.recall("columns", ({}))
     function widthOf(key: string): real { return root.widths[key] ?? Theme.dp(root.defaults[key] ?? 140) }
+    // A narrow pane lets go of the last columns first, as responsive tables do, before the name falls under its least
+    // width: the keys come in order of worth, and one column always stays beside the name.
     readonly property var columns: {
         const rest = root.keys.slice(1).map(k => ({ key: k, width: root.widthOf(k) }))
-        const used = rest.reduce((a, c) => a + c.width, 0)
-        return [{ key: "name", width: Math.max(Theme.dp(220), list.width - used - Theme.dp(12)) }].concat(rest)
+        const least = Theme.dp(220)
+        const room = () => list.width - rest.reduce((a, c) => a + c.width, 0) - Theme.dp(12)
+        while (rest.length > 1 && room() < least) rest.pop()
+        return [{ key: "name", width: Math.max(least, room()) }].concat(rest)
     }
     readonly property real contentWidth: root.columns.reduce((a, c) => a + c.width, 0) + Theme.dp(12)
 
