@@ -349,6 +349,12 @@ Item {
                 else if (!place.it.missing && !root.browser.actions.dropRefused(drop.urls, place.it.path)) root.browser.actions.drop(drop, place.it.path)
             }
         }
+        // Held over a place while dragging, it opens, so the drop can go deeper.
+        Timer {
+            interval: 900
+            running: place.dropping && place.it.path !== "trash:"
+            onTriggered: { place.dropping = false; root.open(place.it, false) }
+        }
         // The room on a disk shows in the window's tip, over the rows, never under the row below.
         Timer {
             interval: place.QsWindow.window?.tips?.delay ?? 650

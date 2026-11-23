@@ -35,6 +35,8 @@ FloatingWindow {
     readonly property bool windowActive: stageItem.Window.active
     property var tabs: []
     property int tabIndex: 0
+    // The places of the tabs closed last, for Ctrl+Shift+T.
+    property var closedTabs: []
     readonly property var currentPage: root.tabs[root.tabIndex] ?? null
     readonly property var activePane: root.currentPage ? root.currentPage.activePane : null
     property string renaming: ""
@@ -69,6 +71,7 @@ FloatingWindow {
     function closeTab(i: int): void {
         if (root.tabs.length <= 1) { root.closeWindow(); return }
         const page = root.tabs[i]
+        root.closedTabs = root.closedTabs.concat([page.activePane.folder.place]).slice(-10)
         const list = root.tabs.slice()
         list.splice(i, 1)
         const current = root.currentPage
@@ -84,6 +87,12 @@ FloatingWindow {
         list.splice(to, 0, list.splice(from, 1)[0])
         root.tabs = list
         root.tabIndex = list.indexOf(current)
+    }
+    function reopenTab(): void {
+        if (root.closedTabs.length === 0) return
+        const place = root.closedTabs[root.closedTabs.length - 1]
+        root.closedTabs = root.closedTabs.slice(0, -1)
+        root.newTab(place)
     }
     function stepTab(d: int): void {
         if (root.tabs.length > 1) root.tabIndex = (root.tabIndex + d + root.tabs.length) % root.tabs.length
@@ -286,6 +295,7 @@ FloatingWindow {
     Key { sequences: [StandardKey.Find]; always: true; onActivated: root.head.focusSearch() }
     Key { sequence: "Ctrl+T"; always: true; onActivated: root.newTab(root.pane ? root.pane.folder.place : "") }
     Key { sequence: "Ctrl+W"; always: true; onActivated: root.closeTab(root.tabIndex) }
+    Key { sequence: "Ctrl+Shift+T"; always: true; onActivated: root.reopenTab() }
     Key { sequence: "Ctrl+Tab"; always: true; onActivated: root.stepTab(1) }
     Key { sequence: "Ctrl+Shift+Tab"; always: true; onActivated: root.stepTab(-1) }
     Key { sequence: "Ctrl+PgDown"; always: true; onActivated: root.stepTab(1) }
