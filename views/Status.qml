@@ -78,7 +78,7 @@ Item {
         // The size of what is shown: pictures in the grid, rows in the list.
         Item {
             id: zoom
-            visible: root.pane && root.pane.viewMode !== "columns"
+            visible: !!root.pane
             anchors.verticalCenter: parent.verticalCenter
             width: Theme.dp(110)
             height: Theme.dp(24)

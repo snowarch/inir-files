@@ -10,9 +10,11 @@ Item {
     required property var pane
     readonly property var folder: root.pane.folder
     readonly property alias view: current
-    readonly property real colWidth: Theme.dp(252)
-    readonly property real rowHeight: Theme.dp(30)
-    readonly property real iconSize: Theme.dp(18)
+    // The list's zoom steps size the columns too.
+    readonly property int zoom: Math.max(0, Math.min(2, Number(Prefs.get("listZoom"))))
+    readonly property real colWidth: Theme.dp([228, 252, 292][root.zoom])
+    readonly property real rowHeight: Theme.dp([26, 30, 38][root.zoom])
+    readonly property real iconSize: Theme.dp([16, 18, 24][root.zoom])
 
     function under(path: string, top: string): bool { return path === top || path.startsWith(top.endsWith("/") ? top : top + "/") }
     readonly property string base: root.folder.mode !== "folder" ? "" : (root.under(root.folder.path, Core.home) ? Core.home : "/")

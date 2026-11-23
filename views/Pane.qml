@@ -194,6 +194,20 @@ FocusScope {
     Component { id: gridView; GridPane { pane: root } }
     Component { id: listView; ListPane { pane: root } }
     Component { id: columnsView; ColumnsPane { pane: root } }
+    // Ctrl or Alt with the wheel zooms the view: a step per notch, a touchpad adds up to one. A plain wheel scrolls on.
+    MouseArea {
+        anchors.fill: loader
+        acceptedButtons: Qt.NoButton
+        property real wheelSum: 0
+        onWheel: wheel => {
+            if (!(wheel.modifiers & (Qt.ControlModifier | Qt.AltModifier))) { wheel.accepted = false; return }
+            const d = wheel.angleDelta.y || wheel.angleDelta.x
+            if (d * wheelSum < 0) wheelSum = 0
+            wheelSum += d
+            const steps = Math.trunc(wheelSum / 120)
+            if (steps !== 0) { wheelSum -= steps * 120; root.browser.actions.zoom(steps) }
+        }
+    }
 
     // ---- the place has nothing to show
     readonly property string blank: {
