@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import QtQuick.Controls.Basic as QQC
 import qs.services
 import qs.kit
@@ -100,7 +101,7 @@ Item {
         Glyph {
             id: placeGlyph
             x: Theme.dp(21)
-            y: Theme.dp(17) - height / 2
+            y: Math.round(Theme.dp(17) - height / 2)
             name: place.it.glyph
             size: Theme.dp(19)
             fill: place.current ? 1 : 0
@@ -112,7 +113,7 @@ Item {
             anchors.leftMargin: Theme.dp(11)
             anchors.right: tail.left
             anchors.rightMargin: Theme.dp(6)
-            y: Theme.dp(17) - height / 2
+            y: Math.round(Theme.dp(17) - height / 2)
             text: place.it.name
             size: Theme.row
             strong: place.current
@@ -179,16 +180,15 @@ Item {
             onExited: place.dropping = false
             onDropped: drop => { place.dropping = false; root.browser.actions.drop(drop, place.it.path) }
         }
-        Rectangle {
-            visible: (place.it.detail ?? "").length > 0 && placeMouse.containsMouse
-            z: 10
-            x: Theme.dp(52)
-            y: parent.height - Theme.dp(2)
-            width: detailText.implicitWidth + Theme.dp(14)
-            height: Theme.dp(22)
-            radius: Theme.dp(7)
-            color: Theme.raised
-            Txt { id: detailText; anchors.centerIn: parent; text: place.it.detail ?? ""; size: Theme.small; color: Theme.ink2 }
+        // The room on a disk shows in the window's tip, over the rows, never under the row below.
+        Timer {
+            interval: 650
+            running: placeMouse.containsMouse && (place.it.detail ?? "").length > 0
+            onTriggered: place.QsWindow.window?.tips?.show(place, place.it.detail, "")
+        }
+        Connections {
+            target: placeMouse
+            function onContainsMouseChanged() { if (!placeMouse.containsMouse) place.QsWindow.window?.tips?.hide(place) }
         }
     }
 
@@ -273,14 +273,17 @@ Item {
             Item {
                 visible: root.marks.length === 0
                 width: col.width
-                height: Theme.dp(34)
+                height: hint.implicitHeight + Theme.dp(16)
                 Txt {
+                    id: hint
                     x: Theme.dp(20)
                     width: parent.width - Theme.dp(40)
                     anchors.verticalCenter: parent.verticalCenter
                     text: I18n.tr("Drop a folder here to keep it")
                     size: Theme.small
                     color: Theme.ink3
+                    wrapMode: Text.Wrap
+                    elide: Text.ElideNone
                 }
                 DropArea {
                     anchors.fill: parent
