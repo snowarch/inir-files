@@ -13,12 +13,14 @@ Item {
     property bool badge: true
     // How much larger than size a thumbnail may draw: the grid lets a picture fill its whole plate.
     property real grow: 0
+    // The picture fills the whole square and is cut to it, as the gallery shows it, rather than fitting inside.
+    property bool crop: false
 
     readonly property string path: root.entry?.path ?? ""
     readonly property real mtime: root.entry?.mtime ?? 0
     readonly property real dpr: root.Window.window?.devicePixelRatio ?? 1
     readonly property real px: (root.size + root.grow) * root.dpr
-    readonly property string thumbSize: Core.thumbSize(root.px)
+    readonly property string thumbSize: Core.thumbSize(root.px, root.crop)
     readonly property bool dir: root.entry?.dir === true
     // A drawn folder holds a picture from inside it: its cover, else its first picture.
     readonly property bool cover: root.dir && root.size >= 48 && Prefs.get("covers") !== false && Prefs.get("icons") !== "system"
@@ -76,7 +78,8 @@ Item {
         height: width
         visible: root.showThumb
         source: root.thumbFile.length > 0 && !root.dir ? Fmt.url(root.thumbFile) + "?" + root.mtime : ""
-        fillMode: Image.PreserveAspectFit
+        fillMode: root.crop ? Image.PreserveAspectCrop : Image.PreserveAspectFit
+        clip: root.crop
         asynchronous: true
         smooth: true
         // Decoded at the size it draws: no mipmaps to keep in memory.
@@ -86,7 +89,7 @@ Item {
         Behavior on opacity { NumberAnimation { duration: Theme.fast } }
         // A hairline round the picture so a white page still has an edge.
         Rectangle {
-            visible: thumb.status === Image.Ready
+            visible: thumb.status === Image.Ready && !root.crop
             x: (parent.width - thumb.paintedWidth) / 2
             y: (parent.height - thumb.paintedHeight) / 2
             width: thumb.paintedWidth
@@ -98,11 +101,14 @@ Item {
         // A film plays: a mark in the corner.
         // The Loader takes its size from the mark, so it is placed by the picture's own edges.
         Loader {
-            readonly property real side: Math.max(16, root.size * 0.26)
-            readonly property real inset: Math.max(4, root.size * 0.05)
+            readonly property real side: root.crop ? Math.max(18, Math.min(28, root.size * 0.14)) : Math.max(16, root.size * 0.26)
+            readonly property real inset: root.crop ? Math.max(6, root.size * 0.04) : Math.max(4, root.size * 0.05)
+            // A cropped picture paints past the square: its edges are the square's.
+            readonly property real shownW: Math.min(thumb.paintedWidth, thumb.width)
+            readonly property real shownH: Math.min(thumb.paintedHeight, thumb.height)
             active: root.badge && thumb.status === Image.Ready && root.entry?.kind === "video" && root.size >= 40
-            x: (thumb.width - thumb.paintedWidth) / 2 + inset
-            y: (thumb.height + thumb.paintedHeight) / 2 - side - inset
+            x: (thumb.width - shownW) / 2 + inset
+            y: (thumb.height + shownH) / 2 - side - inset
             sourceComponent: Rectangle {
             width: parent ? parent.side : 16
             height: width
@@ -117,9 +123,9 @@ Item {
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: Theme.fast } }
         anchors.centerIn: parent
-        width: Math.round((root.size + root.grow) * 0.94)
-        height: Math.round(width * (root.entry?.kind === "video" ? 0.5625 : 0.75))
-        radius: Math.max(2, Math.round(root.size * 0.04))
+        width: root.crop ? root.size + root.grow : Math.round((root.size + root.grow) * 0.94)
+        height: root.crop ? width : Math.round(width * (root.entry?.kind === "video" ? 0.5625 : 0.75))
+        radius: root.crop ? 0 : Math.max(2, Math.round(root.size * 0.04))
         color: Theme.fill
     }
     Loader {

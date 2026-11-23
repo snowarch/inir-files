@@ -351,12 +351,14 @@ Item {
         if (Prefs.get("sort") === key) Prefs.set("desc", !Prefs.get("desc"))
         else { Prefs.set("sort", key); Prefs.set("desc", key === "mtime" || key === "size") }
     }
+    // The grid and the gallery share their zoom; the list and the columns share theirs.
+    function zoomKey(): string { return ["grid", "gallery"].includes(Prefs.get("view")) ? "zoom" : "listZoom" }
     function zoom(step: int): void {
-        if (Prefs.get("view") === "grid") Prefs.set("zoom", Math.max(1, Math.min(7, Number(Prefs.get("zoom")) + step)))
+        if (root.zoomKey() === "zoom") Prefs.set("zoom", Math.max(1, Math.min(7, Number(Prefs.get("zoom")) + step)))
         else Prefs.set("listZoom", Math.max(0, Math.min(2, Number(Prefs.get("listZoom")) + step)))
     }
     function resetZoom(): void {
-        const key = Prefs.get("view") === "grid" ? "zoom" : "listZoom"
+        const key = root.zoomKey()
         Prefs.set(key, Prefs.defaults[key])
     }
 
@@ -381,7 +383,8 @@ Item {
         return [
             { text: I18n.tr("Grid"), glyph: "grid_view", keys: "Ctrl+1", checked: v === "grid", run: () => root.setView("grid") },
             { text: I18n.tr("List"), glyph: "view_list", keys: "Ctrl+2", checked: v === "list", run: () => root.setView("list") },
-            { text: I18n.tr("Columns"), glyph: "view_column", keys: "Ctrl+3", checked: v === "columns", run: () => root.setView("columns") }
+            { text: I18n.tr("Columns"), glyph: "view_column", keys: "Ctrl+3", checked: v === "columns", run: () => root.setView("columns") },
+            { text: I18n.tr("Gallery"), glyph: "photo_library", keys: "Ctrl+4", checked: v === "gallery", run: () => root.setView("gallery") }
         ]
     }
     function newEntries(pane: var): var {

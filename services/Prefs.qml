@@ -17,7 +17,7 @@ Singleton {
         tint: 0.55,             // how much of the desktop's colour reaches the ground
         density: 1,             // 0.9 compact, 1 regular, 1.1 roomy
         motion: true,
-        view: "grid",           // grid, list, columns
+        view: "grid",           // grid, list, columns, gallery
         zoom: 3,                // grid icon step, 0..6
         listZoom: 1,            // list row step, 0..2
         sort: "name",           // name, size, mtime, kind, ext

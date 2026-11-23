@@ -307,6 +307,7 @@ FloatingWindow {
     Key { sequence: "Ctrl+1"; always: true; onActivated: root.actions.setView("grid") }
     Key { sequence: "Ctrl+2"; always: true; onActivated: root.actions.setView("list") }
     Key { sequence: "Ctrl+3"; always: true; onActivated: root.actions.setView("columns") }
+    Key { sequence: "Ctrl+4"; always: true; onActivated: root.actions.setView("gallery") }
     Key { sequence: "Ctrl+I"; always: true; onActivated: Prefs.set("aside", !Prefs.get("aside")) }
     Key { sequence: "F9"; always: true; onActivated: root.toggleRail() }
     Key { sequence: "Escape"; enabled: root.railOpen; onActivated: root.railOpen = false }

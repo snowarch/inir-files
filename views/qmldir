@@ -6,6 +6,8 @@ GridPane 1.0 GridPane.qml
 ListPane 1.0 ListPane.qml
 ColumnsPane 1.0 ColumnsPane.qml
 Cell 1.0 Cell.qml
+GalleryPane 1.0 GalleryPane.qml
+Tile 1.0 Tile.qml
 Line 1.0 Line.qml
 NameEdit 1.0 NameEdit.qml
 Band 1.0 Band.qml

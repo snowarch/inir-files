@@ -229,12 +229,13 @@ FocusScope {
         id: loader
         anchors.fill: parent
         focus: true
-        sourceComponent: root.viewMode === "list" ? listView : root.viewMode === "columns" ? columnsView : gridView
+        sourceComponent: root.viewMode === "list" ? listView : root.viewMode === "columns" ? columnsView : root.viewMode === "gallery" ? galleryView : gridView
     }
     NumberAnimation { id: arrive; target: loader; property: "opacity"; from: 0; to: 1; duration: Theme.fast; easing.type: Easing.OutCubic }
     Component { id: gridView; GridPane { pane: root } }
     Component { id: listView; ListPane { pane: root } }
     Component { id: columnsView; ColumnsPane { pane: root } }
+    Component { id: galleryView; GalleryPane { pane: root } }
     // Ctrl or Alt with the wheel zooms the view: a step per notch, a touchpad adds up to one. A plain wheel scrolls on.
     MouseArea {
         anchors.fill: loader

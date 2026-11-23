@@ -82,7 +82,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             width: Theme.dp(110)
             height: Theme.dp(24)
-            readonly property bool grid: root.pane && root.pane.viewMode === "grid"
+            readonly property bool grid: root.pane && (root.pane.viewMode === "grid" || root.pane.viewMode === "gallery")
             readonly property int lo: zoom.grid ? 1 : 0
             readonly property int hi: zoom.grid ? 7 : 2
             readonly property int value: Number(Prefs.get(zoom.grid ? "zoom" : "listZoom"))

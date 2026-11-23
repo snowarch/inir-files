@@ -184,7 +184,8 @@ Item {
             options: [
                 { value: "grid", glyph: "grid_view", tip: I18n.tr("Grid"), keys: "Ctrl+1" },
                 { value: "list", glyph: "view_list", tip: I18n.tr("List"), keys: "Ctrl+2" },
-                { value: "columns", glyph: "view_column", tip: I18n.tr("Columns"), keys: "Ctrl+3" }
+                { value: "columns", glyph: "view_column", tip: I18n.tr("Columns"), keys: "Ctrl+3" },
+                { value: "gallery", glyph: "photo_library", tip: I18n.tr("Gallery"), keys: "Ctrl+4" }
             ]
             onChosen: value => root.browser.actions.setView(value)
         }

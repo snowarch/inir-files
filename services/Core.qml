@@ -100,8 +100,12 @@ Singleton {
     property var thumbWaiters: ({})
     property var thumbAsk: ({})
     function thumbKey(path: string, size: string, mtime: real): string { return path + "|" + size + "|" + mtime }
-    // The freedesktop size a picture drawn px device pixels wide is read from.
-    function thumbSize(px: real): string { return px <= 128 ? "normal" : px <= 256 ? "large" : px <= 512 ? "x-large" : "xx-large" }
+    // The freedesktop size a picture drawn px device pixels wide is read from. A picture cut to fill a square needs its
+    // short side to cover it: a 3:2 photo's long side is half as long again.
+    function thumbSize(px: real, crop: var): string {
+        const p = crop === true ? px * 1.5 : px
+        return p <= 128 ? "normal" : p <= 256 ? "large" : p <= 512 ? "x-large" : "xx-large"
+    }
     // Whether the settings let an entry have pictures at all: never, or only on this computer.
     function thumbsOn(e: var): bool {
         const mode = Prefs.get("thumbnails")
