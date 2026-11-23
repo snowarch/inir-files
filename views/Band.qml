@@ -84,7 +84,7 @@ MouseArea {
         parent: root.view.contentItem
         visible: root.drawing
         z: 50
-        radius: Theme.dp(4)
+        radius: Theme.round(4)
         color: Theme.alpha(Theme.accent, 0.12)
         border.width: 1
         border.color: Theme.alpha(Theme.accent, 0.6)

@@ -14,7 +14,7 @@ Inset {
 
     color: Theme.light ? "#ffffff" : Theme.mix(Theme.surface, "#000000", 0.25)
     focused: true
-    radius: Theme.dp(7)
+    radius: Theme.round(7)
     implicitHeight: Math.max(Theme.dp(26), input.contentHeight + Theme.dp(8))
 
     function finish(keep: bool): void {

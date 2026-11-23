@@ -11,7 +11,7 @@ Inset {
     readonly property var pane: root.browser.activePane
     readonly property var folder: root.pane ? root.pane.folder : null
     property bool editing: false
-    radius: Theme.dp(12)
+    radius: Theme.round(12)
     implicitHeight: Theme.dp(36)
     focused: root.editing
 
@@ -169,7 +169,7 @@ Inset {
                         anchors.verticalCenter: parent.verticalCenter
                         height: Theme.dp(28)
                         width: inner.width + Theme.dp(16)
-                        radius: Theme.dp(9)
+                        radius: Theme.round(9)
                         color: plate.dropping ? Theme.selectionHover : crumbMouse.pressed ? Theme.fillPress : crumbMouse.containsMouse && crumb.modelData.path.length > 0 ? Theme.fillHover : "transparent"
                         Row {
                             id: inner
@@ -236,7 +236,7 @@ Inset {
                         anchors.verticalCenter: parent.verticalCenter
                         height: Theme.dp(28)
                         width: Theme.dp(32)
-                        radius: Theme.dp(9)
+                        radius: Theme.round(9)
                         color: moreMouse.pressed ? Theme.fillPress : moreMouse.containsMouse ? Theme.fillHover : "transparent"
                         Glyph { anchors.centerIn: parent; name: "more_horiz"; size: Theme.dp(18); color: Theme.ink2 }
                         MouseArea {

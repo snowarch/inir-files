@@ -39,7 +39,7 @@ Item {
         y: Theme.dp(4)
         width: root.iconSize + Theme.dp(18)
         height: width
-        radius: Math.min(Theme.dp(16), width * 0.18)
+        radius: Math.min(Theme.round(16), width * 0.18)
         color: root.dropping ? Theme.selectionHover : root.chosen ? (root.lit ? (root.hovered ? Theme.selectionHover : Theme.selection) : Theme.fillPress) : root.hovered ? Theme.fill : "transparent"
         border.width: root.dropping || root.focused ? Math.max(1, Theme.dp(1.5)) : 0
         border.color: root.dropping ? Theme.accent : Theme.alpha(Theme.accent, 0.55)
@@ -66,7 +66,7 @@ Item {
         y: label.y - Theme.dp(2)
         width: label.contentWidth + Theme.dp(12)
         height: label.contentHeight + Theme.dp(4)
-        radius: Math.min(Theme.dp(8), height / 2)
+        radius: Math.min(Theme.round(8), height / 2)
         readonly property color tint: root.chosen ? (root.lit ? (root.hovered ? Theme.selectionHover : Theme.selection) : Theme.fillPress) : "transparent"
         color: root.spills ? Qt.tint(Theme.canvas, pill.tint) : pill.tint
         border.width: root.spills && !Theme.light ? 1 : 0

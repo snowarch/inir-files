@@ -31,7 +31,7 @@ Item {
                     id: face
                     width: parent.width
                     height: parent.height
-                    radius: Theme.dp(11)
+                    radius: Theme.round(11)
                     color: tab.current ? (Theme.light ? "#ffffff" : Theme.mix(Theme.canvas, Theme.ink, 0.08)) : tab.dropping ? Theme.selection : tabMouse.containsMouse ? Theme.fill : "transparent"
                     Rectangle { visible: tab.current; x: parent.radius; width: parent.width - parent.radius * 2; height: 1; color: Theme.edge }
                     Glyph {

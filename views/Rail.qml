@@ -193,7 +193,7 @@ Item {
             anchors.fill: parent
             anchors.leftMargin: Theme.dp(10)
             anchors.rightMargin: Theme.dp(10)
-            radius: Theme.dp(10)
+            radius: Theme.round(10)
             color: place.lifted ? Theme.raised : place.dropping ? Theme.selectionHover : place.current ? Theme.accentPlate : placeMouse.pressed ? Theme.fillPress : rowHover.hovered ? Theme.fill : "transparent"
             border.width: place.dropping ? Math.max(1, Theme.dp(1.5)) : place.lifted && !Theme.light ? 1 : 0
             border.color: place.dropping ? Theme.accent : Theme.line
@@ -419,7 +419,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: Theme.dp(28)
                 height: width
-                radius: Theme.dp(9)
+                radius: Theme.round(9)
                 color: Theme.accent
                 Glyph { anchors.centerIn: parent; name: "folder"; fill: 1; size: Theme.dp(17); color: Theme.inkAccent }
             }
@@ -505,7 +505,7 @@ Item {
             id: settingsPlate
             anchors.fill: parent
             anchors.margins: Theme.dp(10)
-            radius: Theme.dp(10)
+            radius: Theme.round(10)
             color: settingsMouse.pressed ? Theme.fillPress : settingsMouse.containsMouse ? Theme.fill : "transparent"
             Glyph { id: gear; x: Theme.dp(11); anchors.verticalCenter: parent.verticalCenter; name: "settings"; size: Theme.dp(19); color: Theme.inkNav }
             Txt { anchors.left: gear.right; anchors.leftMargin: Theme.dp(11); anchors.verticalCenter: parent.verticalCenter; text: I18n.tr("Settings"); size: Theme.row; color: Theme.inkNav }

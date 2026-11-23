@@ -136,7 +136,7 @@ Item {
                 id: search
                 visible: root.searchOpen
                 anchors.fill: parent
-                radius: Theme.dp(12)
+                radius: Theme.round(12)
                 glyph: "search"
                 placeholder: root.folder && root.folder.content ? I18n.tr("Text inside files") : I18n.tr("Search names")
                 onEdited: {

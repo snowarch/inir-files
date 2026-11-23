@@ -295,7 +295,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: root.large ? Math.min(parent.width, Theme.dp(940)) : parent.width
             height: parent.height
-            radius: Theme.dp(14)
+            radius: Theme.round(14)
             color: root.large ? Theme.card : Theme.inset
             clip: true
             readonly property bool markdown: root.mime === "text/markdown" || root.path.toLowerCase().endsWith(".md")
@@ -414,7 +414,7 @@ Item {
     Component {
         id: archive
         Inset {
-            radius: Theme.dp(14)
+            radius: Theme.round(14)
             clip: true
             readonly property var a: root.info.archive ?? null
             Icon { anchors.fill: parent; visible: !parent.a }

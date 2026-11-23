@@ -348,7 +348,7 @@ FocusScope {
     Rectangle {
         anchors.fill: parent
         anchors.margins: Theme.dp(4)
-        radius: Theme.cardRadius - Theme.dp(4)
+        radius: Math.max(0, Theme.cardRadius - Theme.round(4))
         color: Theme.alpha(Theme.accent, 0.05)
         border.width: Math.max(1, Theme.dp(2))
         border.color: Theme.alpha(Theme.accent, 0.7)

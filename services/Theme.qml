@@ -8,19 +8,19 @@ import Quickshell.Io
 // into the surface (a darker top edge, a lit bottom one), an edge of light on what is raised, and the chosen thing as
 // a solid pill in the accent. The palette is the one the shell hands to apps (app-palette.json: its scheme with the
 // global style laid over it), else the scheme as generated (colors.json); both are watched, so the app follows the
-// shell as it changes. With no palette on disk it falls back to the same graphite with a blue accent.
+// shell as it changes. With no palette on disk it falls back to the same graphite with a blue accent. Its faces, size
+// scale and corners come from the shell too (app-look.json), so the window wears the family the desktop wears.
 Singleton {
     id: root
 
     readonly property string home: Quickshell.env("HOME") ?? ""
     readonly property string stateHome: Quickshell.env("XDG_STATE_HOME") || (root.home + "/.local/state")
-    readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || (root.home + "/.config")
 
     property var appPal: ({})
     property var schemePal: ({})
     readonly property var pal: root.appPal.surface !== undefined ? root.appPal : root.schemePal
     property string systemMode: "dark"
-    property var typography: ({})
+    property var look: ({})
 
     function parse(text: string): var {
         try { return JSON.parse(text) } catch (e) { return ({}) }
@@ -53,11 +53,14 @@ Singleton {
         onLoaded: root.systemMode = root.parse(text()).mode === "light" ? "light" : "dark"
     }
     FileView {
-        path: root.configHome + "/illogical-impulse/config.json"
+        path: root.stateHome + "/quickshell/user/generated/app-look.json"
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
-        onLoaded: root.typography = root.parse(text())?.appearance?.typography ?? ({})
+        onLoaded: {
+            const l = root.parse(text())
+            if (l.font !== undefined) root.look = l
+        }
     }
 
     // ---- colour arithmetic
@@ -167,15 +170,22 @@ Singleton {
     // ---- measure: the sizes as drawn, the density on top
     readonly property real density: Prefs.density
     function dp(value: real): real { return Math.round(value * root.density) }
-    readonly property real radius: root.dp(12)
-    readonly property real cardRadius: root.dp(18)
-    readonly property real corner: root.dp(22)
+    // How round the shell draws its corners: 1 its standard ladder, 0 square, up to 2.
+    readonly property real shape: {
+        const r = Number(root.look.rounding)
+        return isFinite(r) && root.look.rounding !== undefined ? Math.max(0, Math.min(2, r)) : 1
+    }
+    // A corner's radius: the density and the shell's shape on top. Pills and circles keep half their height.
+    function round(value: real): real { return Math.round(value * root.density * root.shape) }
+    readonly property real radius: root.round(12)
+    readonly property real cardRadius: root.round(18)
+    readonly property real corner: root.round(22)
 
     // ---- type
-    readonly property real sizeScale: Number(root.typography.sizeScale ?? 1) || 1
-    readonly property string sans: root.typography.mainFont || "sans-serif"
-    readonly property string title: root.typography.titleFont || root.sans
-    readonly property string mono: root.typography.monospaceFont || "monospace"
+    readonly property real sizeScale: Number(root.look.sizeScale ?? 1) || 1
+    readonly property string sans: root.look.font || "sans-serif"
+    readonly property string title: root.look.title || root.sans
+    readonly property string mono: root.look.mono || "monospace"
     readonly property string glyphs: "Material Symbols Rounded"
     // Whole pixels: a size between two is cut down to the lower one and drawn soft. The steps sit one under the shell's
     // own (15 px for its labels at 1x), so a list holds more and still reads beside it; nothing goes under 11. The

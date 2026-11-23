@@ -15,7 +15,7 @@ Item {
         width: Theme.dp(18)
         height: width
         anchors.verticalCenter: parent.verticalCenter
-        radius: Theme.dp(5)
+        radius: Theme.round(5)
         color: root.checked ? Theme.accent : Theme.inset
         border.width: root.checked ? 0 : 1
         border.color: Theme.line

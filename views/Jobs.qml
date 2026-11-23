@@ -150,7 +150,7 @@ Item {
                             readonly property bool live: j.state === "scan" || j.state === "running" || j.state === "waiting"
                             width: col.width
                             height: inner.implicitHeight + Theme.dp(16)
-                            Rectangle { anchors.fill: parent; radius: Theme.dp(12); color: Theme.fill }
+                            Rectangle { anchors.fill: parent; radius: Theme.round(12); color: Theme.fill }
                             Column {
                                 id: inner
                                 x: Theme.dp(12)

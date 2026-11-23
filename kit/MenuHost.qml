@@ -153,7 +153,7 @@ FocusScope {
             Rectangle {
                 id: bg
                 anchors.fill: parent
-                radius: Theme.dp(14)
+                radius: Theme.round(14)
                 color: Theme.raised
                 border.width: Theme.light ? 0 : 1
                 border.color: Theme.line
@@ -197,7 +197,7 @@ FocusScope {
                         Rectangle {
                             visible: !row.sep && !row.header
                             anchors.fill: parent
-                            radius: Theme.dp(9)
+                            radius: Theme.round(9)
                             color: row.on && row.usable ? (row.modelData.danger ? Theme.alpha(Theme.danger, 0.16) : Theme.fillHover) : "transparent"
                         }
                         Item {

@@ -77,7 +77,7 @@ Item {
                     Rectangle {
                         anchors.fill: parent
                         anchors.margins: Theme.dp(3)
-                        radius: Theme.dp(7)
+                        radius: Theme.round(7)
                         color: colMouse.pressed ? Theme.fillPress : colMouse.containsMouse && col.sortKey.length > 0 ? Theme.fill : "transparent"
                     }
                     Row {

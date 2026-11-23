@@ -42,7 +42,7 @@ Item {
         x: Math.round(root.beside ? Math.min(root.width - width - Theme.dp(6), root.at.x)
             : Math.max(Theme.dp(6), Math.min(root.width - width - Theme.dp(6), root.at.x - width / 2)))
         y: Math.round(root.beside ? root.at.y - height / 2 : root.at.y + height > root.height - Theme.dp(6) ? root.above - height : root.at.y)
-        radius: Theme.dp(9)
+        radius: Theme.round(9)
         color: Theme.light ? "#1c1d21" : Theme.mix(Theme.highest, Theme.ink, 0.1)
         opacity: shown ? 1 : 0
         visible: opacity > 0
