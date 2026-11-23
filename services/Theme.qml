@@ -15,12 +15,15 @@ Singleton {
 
     readonly property string home: Quickshell.env("HOME") ?? ""
     readonly property string stateHome: Quickshell.env("XDG_STATE_HOME") || (root.home + "/.local/state")
+    readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || (root.home + "/.config")
 
     property var appPal: ({})
     property var schemePal: ({})
     readonly property var pal: root.appPal.surface !== undefined ? root.appPal : root.schemePal
     property string systemMode: "dark"
     property var look: ({})
+    // Until the shell hands its look (a shell from before app-look.json), its own config's typography stands in.
+    property var typography: ({})
 
     function parse(text: string): var {
         try { return JSON.parse(text) } catch (e) { return ({}) }
@@ -61,6 +64,13 @@ Singleton {
             const l = root.parse(text())
             if (l.font !== undefined) root.look = l
         }
+    }
+    FileView {
+        path: root.configHome + "/illogical-impulse/config.json"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.typography = root.parse(text())?.appearance?.typography ?? ({})
     }
 
     // ---- colour arithmetic
@@ -182,10 +192,10 @@ Singleton {
     readonly property real corner: root.round(22)
 
     // ---- type
-    readonly property real sizeScale: Number(root.look.sizeScale ?? 1) || 1
-    readonly property string sans: root.look.font || "sans-serif"
-    readonly property string title: root.look.title || root.sans
-    readonly property string mono: root.look.mono || "monospace"
+    readonly property real sizeScale: Number(root.look.sizeScale ?? root.typography.sizeScale ?? 1) || 1
+    readonly property string sans: root.look.font || root.typography.mainFont || "sans-serif"
+    readonly property string title: root.look.title || root.typography.titleFont || root.sans
+    readonly property string mono: root.look.mono || root.typography.monospaceFont || "monospace"
     readonly property string glyphs: "Material Symbols Rounded"
     // Whole pixels: a size between two is cut down to the lower one and drawn soft. The steps sit one under the shell's
     // own (15 px for its labels at 1x), so a list holds more and still reads beside it; nothing goes under 11. The
