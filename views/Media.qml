@@ -37,6 +37,8 @@ Item {
         if (root.textual || root.kind === "archive") return Theme.dp(300)
         if (root.kind === "font") return Theme.dp(260)
         if (root.kind === "audio") return Theme.dp(250)
+        // A small picture takes no more room than it needs.
+        if (root.kind === "image" && root.info.height > 0 && root.mime !== "image/svg+xml") return Math.round(Math.min(root.width * root.ratio, Math.max(Theme.dp(140), root.info.height + Theme.dp(24))))
         return Math.round(root.width * root.ratio)
     }
 
@@ -181,17 +183,23 @@ Item {
             Icon { anchors.fill: parent; visible: img.status !== Image.Ready }
             Image {
                 id: img
-                anchors.fill: parent
+                // Drawn at its own size, as a browser draws a picture; only a larger one shrinks to fit the face. It loads no
+                // larger than the face and is never enlarged: Qt enlarges a picture up to sourceSize when it keeps the
+                // aspect, so the aspect is kept here, by the size. A vector keeps it in Qt, as Qt draws it at any size.
+                readonly property real fit: implicitWidth > 0 && implicitHeight > 0 ? Math.min(1, pic.width / implicitWidth, pic.height / implicitHeight) : 0
+                anchors.centerIn: parent
+                width: img.fit > 0 ? implicitWidth * img.fit : pic.width
+                height: img.fit > 0 ? implicitHeight * img.fit : pic.height
                 source: root.qtReads ? root.direct(root.entry) : pic.drawn.length > 0 ? Fmt.url(pic.drawn) : ""
-                fillMode: Image.PreserveAspectFit
+                fillMode: root.mime === "image/svg+xml" ? Image.PreserveAspectFit : Image.Stretch
                 asynchronous: true
                 cache: false
                 smooth: true
                 mipmap: true
                 autoTransform: true
                 currentFrame: root.qtReads ? root.page : 0
-                sourceSize.width: Math.round(Math.max(64, width) * root.dpr)
-                sourceSize.height: Math.round(Math.max(64, height) * root.dpr)
+                sourceSize.width: Math.round(Math.max(64, pic.width) * root.dpr)
+                sourceSize.height: Math.round(Math.max(64, pic.height) * root.dpr)
                 opacity: status === Image.Ready ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: Theme.fast } }
             }
@@ -222,9 +230,12 @@ Item {
             Icon { anchors.fill: parent; visible: anim.status !== AnimatedImage.Ready }
             AnimatedImage {
                 id: anim
-                anchors.fill: parent
+                // At its own size, shrunk only to fit, as the still picture.
+                readonly property real fit: implicitWidth > 0 && implicitHeight > 0 ? Math.min(1, parent.width / implicitWidth, parent.height / implicitHeight) : 0
+                anchors.centerIn: parent
+                width: anim.fit > 0 ? implicitWidth * anim.fit : parent.width
+                height: anim.fit > 0 ? implicitHeight * anim.fit : parent.height
                 source: root.direct(root.entry)
-                fillMode: Image.PreserveAspectFit
                 asynchronous: true
                 cache: false
                 playing: root.visible
