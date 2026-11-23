@@ -15,6 +15,8 @@ FocusScope {
     default property alias body: bodyCol.data
     property alias actions: actionsRow.data
     property bool closing: false
+    // A wait before it shows, for work that may need no sheet at all; reveal() shows it at once.
+    property int delay: 0
     // The card's own colour, for what fades into it.
     readonly property color face: card.color
     signal dismissed()
@@ -22,14 +24,48 @@ FocusScope {
     function close(): void {
         if (root.closing) return
         root.closing = true
+        wait.stop()
+        fadeIn.stop()
         root.dismissed()
         fadeOut.start()
     }
-    Component.onCompleted: root.forceActiveFocus()
+    function reveal(): void { if (wait.running) { wait.stop(); fadeIn.start() } }
+
+    // Tab stays in the sheet: past its last control it comes round to the first, and back. Qt walks the whole window.
+    readonly property Item focusNow: Window.activeFocusItem
+    property Item focusLast: null
+    function holds(item: var): bool {
+        for (let i = item; i; i = i.parent)
+            if (i === root) return true
+        return false
+    }
+    function edge(first: bool): var {
+        const start = root.nextItemInFocusChain(true)
+        if (!start || !root.holds(start)) return null
+        let it = start
+        for (let n = 0; !first && n < 500; n++) {
+            const next = it.nextItemInFocusChain(true)
+            if (!next || next === start || !root.holds(next)) break
+            it = next
+        }
+        return it
+    }
+    onFocusNowChanged: {
+        const f = root.focusNow
+        if (!f || root.closing) return
+        if (root.holds(f)) { root.focusLast = f; return }
+        if (!f.activeFocusOnTab || !root.focusLast) return
+        const ahead = root.focusLast.nextItemInFocusChain(true) === f
+        root.edge(ahead)?.forceActiveFocus(ahead ? Qt.TabFocusReason : Qt.BacktabFocusReason)
+    }
+    Keys.onTabPressed: root.edge(true)?.forceActiveFocus(Qt.TabFocusReason)
+    Keys.onBacktabPressed: root.edge(false)?.forceActiveFocus(Qt.BacktabFocusReason)
+    Component.onCompleted: { root.forceActiveFocus(); if (root.delay > 0) wait.start(); else fadeIn.start() }
     Keys.onEscapePressed: if (root.dismissable) root.close()
 
     opacity: 0
-    NumberAnimation on opacity { to: 1; duration: Theme.normal; easing.type: Easing.OutCubic }
+    Timer { id: wait; interval: root.delay; onTriggered: fadeIn.start() }
+    NumberAnimation { id: fadeIn; target: root; property: "opacity"; to: 1; duration: Theme.normal; easing.type: Easing.OutCubic }
     NumberAnimation { id: fadeOut; target: root; property: "opacity"; to: 0; duration: Theme.fast; onFinished: root.destroy() }
 
     Rectangle {
@@ -37,6 +73,9 @@ FocusScope {
         color: Theme.scrim
         MouseArea {
             anchors.fill: parent
+            enabled: root.opacity > 0
+            // Takes the hover too, so a tip of the page behind closes.
+            hoverEnabled: true
             acceptedButtons: Qt.AllButtons
             onClicked: if (root.dismissable) root.close()
             onWheel: wheel => wheel.accepted = true

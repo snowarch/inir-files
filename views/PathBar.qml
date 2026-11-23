@@ -48,7 +48,7 @@ Inset {
         }
         for (const d of Core.places.devices ?? []) if (d.mounted && !d.root)
             take(d.path, d.label || d.model || Fmt.name(d.path), d.tran === "usb" || d.removable ? "usb" : d.fstype === "iso9660" || d.fstype === "udf" ? "album" : "hard_drive")
-        for (const n of Core.places.network ?? []) take(n.path, n.label, n.kind === "phone" ? "smartphone" : n.fstype === "sftp" || n.fstype === "fuse.sshfs" ? "dns" : "lan")
+        for (const n of Core.places.network ?? []) take(n.path, Fmt.share(n), n.kind === "phone" ? "smartphone" : n.fstype === "sftp" || n.fstype === "fuse.sshfs" ? "dns" : "lan")
         return best
     }
 
@@ -92,6 +92,9 @@ Inset {
         return t
     }
     function go(text: string): void {
+        // A server's address (sftp://, smb://, \\\\server\\share) connects first.
+        const typed = text.trim()
+        if ((/^[a-z][a-z0-9+.-]*:\/\//i.test(typed) && !/^file:/i.test(typed)) || typed.startsWith("\\\\")) { root.finish(); root.browser.actions.connect(typed, false); return }
         const target = root.resolve(text)
         if (target.length === 0) { root.finish(); return }
         Core.call("stat", { paths: [target] }, r => {

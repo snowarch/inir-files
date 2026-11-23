@@ -9,6 +9,18 @@ Item {
     signal toggled(bool value)
     implicitHeight: Theme.dp(26)
     implicitWidth: box.width + (root.text.length > 0 ? label.implicitWidth + Theme.dp(8) : 0)
+    activeFocusOnTab: root.enabled && root.visible
+    Keys.onSpacePressed: root.toggled(!root.checked)
+
+    Rectangle {
+        visible: root.activeFocus
+        anchors.fill: box
+        anchors.margins: -Theme.dp(3)
+        radius: box.radius + Theme.dp(3)
+        color: "transparent"
+        border.width: Math.max(1, Theme.dp(2))
+        border.color: Theme.accent
+    }
 
     Rectangle {
         id: box

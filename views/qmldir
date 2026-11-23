@@ -23,6 +23,7 @@ Jobs 1.0 Jobs.qml
 ToastBar 1.0 ToastBar.qml
 Actions 1.0 Actions.qml
 ConflictSheet 1.0 ConflictSheet.qml
+ConnectSheet 1.0 ConnectSheet.qml
 ConfirmSheet 1.0 ConfirmSheet.qml
 PropertiesSheet 1.0 PropertiesSheet.qml
 RenameSheet 1.0 RenameSheet.qml

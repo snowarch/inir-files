@@ -47,6 +47,7 @@ Inset {
         font.hintingPreference: Font.PreferDefaultHinting
         clip: true
         selectByMouse: true
+        activeFocusOnTab: true
         onAccepted: root.accepted()
         onTextEdited: root.edited()
         Keys.onEscapePressed: event => { root.escaped(); event.accepted = true }

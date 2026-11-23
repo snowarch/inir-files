@@ -63,7 +63,12 @@ Singleton {
     function name(path: string): string {
         if (path === "/") return "/"
         const p = path.endsWith("/") ? path.slice(0, -1) : path
-        return p.slice(p.lastIndexOf("/") + 1)
+        return root.mountName(p) || p.slice(p.lastIndexOf("/") + 1)
+    }
+    // A connected server's folder is named by its mount ("dav:host=nas,ssl=true"): its name as the rail gives it, or "".
+    function mountName(path: string): string {
+        const n = path.includes("/gvfs/") ? (Core.places.network ?? []).find(m => m.path === path) : null
+        return n ? root.share(n) : ""
     }
     function parent(path: string): string {
         const p = path.endsWith("/") && path.length > 1 ? path.slice(0, -1) : path
@@ -77,6 +82,8 @@ Singleton {
         if (path === home) return "~"
         return path.startsWith(home + "/") ? "~" + path.slice(home.length) : path
     }
+    // A connected share as people name it: "Media on nas", or the server alone.
+    function share(n: var): string { return n.share ? I18n.tr("%1 on %2", n.share, n.host) : (n.label ?? "") }
     function url(path: string): string {
         return "file://" + path.split("/").map(s => encodeURIComponent(s)).join("/")
     }

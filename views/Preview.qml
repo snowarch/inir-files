@@ -151,7 +151,7 @@ Item {
         if (e.deleted > 0) add(I18n.tr("Deleted"), Fmt.full(e.deleted))
         section(I18n.tr("Place"))
         if (e.origin) add(I18n.tr("From"), Fmt.pretty(e.origin), null, true)
-        else if (i.parent) add(I18n.tr("Folder"), Fmt.pretty(i.parent), () => root.pane.folder.go(i.parent, true), true)
+        else if (i.parent && !Fmt.mountName(e.path)) add(I18n.tr("Folder"), Fmt.pretty(i.parent), () => root.pane.folder.go(i.parent, true), true)
         if (i.target) add(I18n.tr("Points to"), Fmt.pretty(i.target), null, true)
         if (i.modeText) add(I18n.tr("Access"), i.modeText + " · " + i.owner + (i.group && i.group !== i.owner ? ":" + i.group : ""))
         return out
@@ -223,7 +223,7 @@ Item {
                 spacing: Theme.dp(3)
                 Txt {
                     width: parent.width
-                    text: root.many ? Fmt.items(root.list.length) : root.placeOnly ? root.placeFace.title ?? "" : root.entry ? (root.entry.path === Core.home ? I18n.tr("Home") : root.entry.name || "/") : ""
+                    text: root.many ? Fmt.items(root.list.length) : root.placeOnly ? root.placeFace.title ?? "" : root.entry ? (root.entry.path === Core.home ? I18n.tr("Home") : Fmt.mountName(root.entry.path) || root.entry.name || "/") : ""
                     font.family: Theme.title
                     size: Theme.head
                     strong: true

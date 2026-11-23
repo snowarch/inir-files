@@ -96,7 +96,7 @@ pub fn set(ctx: &Ctx, req: &Value) -> Value {
 
 fn signature() -> String {
     let mut s = fs::read_to_string("/proc/self/mountinfo").unwrap_or_default();
-    for dir in ["/dev/disk/by-id".to_string(), format!("/run/user/{}/gvfs", unsafe { libc::getuid() })] {
+    for dir in [PathBuf::from("/dev/disk/by-id"), crate::util::gvfs_dir()] {
         if let Ok(rd) = fs::read_dir(&dir) {
             let mut names: Vec<String> = rd.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
             names.sort();

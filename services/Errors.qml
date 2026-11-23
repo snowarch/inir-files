@@ -24,6 +24,10 @@ Singleton {
         case "core": return I18n.tr("The file service stopped; try again")
         case "norg": return I18n.tr("Searching inside files needs ripgrep")
         case "empty": return I18n.tr("The clipboard is empty")
+        case "nogio": return I18n.tr("Connecting to servers needs gio and gvfs")
+        case "noscheme": return I18n.tr("No installed gvfs backend opens this kind of address")
+        case "badaddress": return I18n.tr("Write an address such as sftp://server or smb://server/share")
+        case "nofuse": return I18n.tr("It is connected, but gvfsd-fuse is not running, so its files cannot open")
         default: return code && code.length > 0 ? code : I18n.tr("Something went wrong")
         }
     }

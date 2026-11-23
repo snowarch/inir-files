@@ -28,6 +28,11 @@ pub fn cache_home() -> PathBuf {
     env_path("XDG_CACHE_HOME").unwrap_or_else(|| home().join(".cache"))
 }
 
+/// Where gvfsd-fuse shows connected servers: the gvfs folder of the session's runtime folder.
+pub fn gvfs_dir() -> PathBuf {
+    env_path("XDG_RUNTIME_DIR").unwrap_or_else(|| PathBuf::from(format!("/run/user/{}", unsafe { libc::getuid() }))).join("gvfs")
+}
+
 /// XDG_DATA_HOME first, then every XDG_DATA_DIRS entry.
 pub fn data_dirs() -> Vec<PathBuf> {
     let mut dirs = vec![data_home()];

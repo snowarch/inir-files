@@ -49,7 +49,7 @@ Item {
         all[path] = one
         Prefs.set("marks", all)
     }
-    // A place among the bookmarks shown, as an index of the whole file, which also holds the remote ones.
+    // A place among the bookmarks shown, as an index of the file.
     function fileIndex(k: int): int {
         if (k >= root.marks.length) return root.allMarks.length
         return Math.max(0, root.allMarks.findIndex(b => b.path === root.marks[k].path))
@@ -58,7 +58,7 @@ Item {
         const from = root.marks.findIndex(m => m.path === path)
         if (from < 0 || to < 0 || to >= root.marks.length || to === from) return
         const at = root.fileIndex(to)
-        const next = (root.pendingMarks ?? root.allMarks.filter(b => !b.remote)).slice()
+        const next = (root.pendingMarks ?? root.allMarks).slice()
         next.splice(to, 0, next.splice(from, 1)[0])
         root.pendingMarks = next
         root.moving++
@@ -85,9 +85,11 @@ Item {
         out.push({ path: "trash:", name: I18n.tr("Trash"), glyph: "delete", kind: "trash", count: root.places.trash ?? 0 })
         return out
     }
-    readonly property var marks: (root.pendingMarks ?? root.allMarks.filter(b => !b.remote)).map(b => ({
-        path: b.path, name: b.name, glyph: b.exists ? (root.looks[b.path]?.glyph || "bookmark") : "bookmark_remove",
-        tint: root.looks[b.path]?.tint ?? "", kind: "bookmark", missing: !b.exists
+    // A server's bookmark (sftp://, smb://) connects when it opens; its address shows in its tip.
+    function serverGlyph(uri: string): string { return /^(sftp|ssh):/i.test(uri) ? "dns" : "lan" }
+    readonly property var marks: (root.pendingMarks ?? root.allMarks).map(b => ({
+        path: b.path, name: b.name, glyph: !b.exists ? "bookmark_remove" : root.looks[b.path]?.glyph || (b.remote ? root.serverGlyph(b.path) : "bookmark"),
+        tint: root.looks[b.path]?.tint ?? "", kind: "bookmark", missing: !b.exists, remote: b.remote === true, detail: b.remote ? b.path : ""
     }))
     readonly property var disks: (root.places.devices ?? []).map(d => ({
         path: d.root ? "/" : d.path,
@@ -98,12 +100,14 @@ Item {
         detail: d.size > 0 ? (d.mounted || d.root ? I18n.tr("%1 free of %2", Fmt.size(d.free), Fmt.size(d.size)) : Fmt.size(d.size)) : ""
     }))
     readonly property var shares: (root.places.network ?? []).map(n => ({
-        path: n.path, name: n.label, glyph: n.kind === "phone" ? "smartphone" : n.fstype === "sftp" || n.fstype === "fuse.sshfs" ? "dns" : "lan",
-        kind: "share", mounted: true, removable: true,
+        path: n.path, name: Fmt.share(n), glyph: n.kind === "phone" ? "smartphone" : n.fstype === "sftp" || n.fstype === "fuse.sshfs" ? "dns" : "lan",
+        kind: "share", mounted: true, removable: true, server: n.kind !== "phone",
         meter: n.size > 0 ? 1 - n.free / n.size : -1, detail: n.size > 0 ? I18n.tr("%1 free of %2", Fmt.size(n.free), Fmt.size(n.size)) : n.fstype
     }))
 
+    readonly property var connectPlace: ({ path: "", name: I18n.tr("Connect a server"), glyph: "add_link", kind: "connect" })
     function open(item: var, newTab: bool): void {
+        if (item.kind === "connect" || item.remote) { root.browser.actions.connect(item.remote ? item.path : "", newTab); return }
         if (item.kind === "device" && !item.mounted) {
             Core.call("mount", { device: item.device }, r => {
                 if (!r.ok) { Toast.fail(I18n.tr("Could not mount: %1", r.error)); return }
@@ -120,8 +124,8 @@ Item {
         const busy = root.place === item.path || root.place.startsWith(item.path + "/")
         if (busy) root.folder.go(Core.home)
         Core.call("unmount", { device: item.device ?? "", path: item.path, eject: item.removable === true && !!item.drive, drive: item.drive ?? "" }, r => {
-            if (!r.ok) Toast.fail(r.error === "busy" ? I18n.tr("%1 is in use. Close what uses it, then try again.", item.name) : I18n.tr("Could not put %1 away: %2", item.name, r.error))
-            else Toast.show(I18n.tr("%1 can be unplugged", item.name), "", null)
+            if (!r.ok) Toast.fail(r.error === "busy" ? I18n.tr("%1 is in use. Close what uses it, then try again.", item.name) : item.server ? I18n.tr("Could not disconnect %1: %2", item.name, r.error) : I18n.tr("Could not put %1 away: %2", item.name, r.error))
+            else Toast.show(item.server ? I18n.tr("Disconnected from %1", item.name) : I18n.tr("%1 can be unplugged", item.name), "", null)
             Core.refreshPlaces()
         })
     }
@@ -284,7 +288,7 @@ Item {
                 size: Theme.dp(24)
                 glyphSize: Theme.dp(16)
                 glyph: "eject"
-                tip: I18n.tr("Put away")
+                tip: place.it.server ? I18n.tr("Disconnect") : I18n.tr("Put away")
                 onClicked: root.eject(place.it)
             }
         }
@@ -328,7 +332,7 @@ Item {
         // A drop goes into the place; on a bookmark's top or bottom edge, a folder joins the bookmarks there.
         DropArea {
             anchors.fill: parent
-            enabled: place.it.kind !== "recent" && (place.mark || !place.it.missing) && (place.it.kind !== "device" || place.it.mounted)
+            enabled: place.it.kind !== "recent" && place.it.kind !== "connect" && (place.mark || !place.it.missing) && (place.it.kind !== "device" || place.it.mounted)
             function slot(y: real): int {
                 if (!place.mark) return -1
                 if (y < place.height * 0.3) return place.index
@@ -338,7 +342,7 @@ Item {
             function aim(drag: var): void {
                 const s = slot(drag.y)
                 if (s >= 0 || root.insertBy === place) { root.insertAt = s; root.insertBy = s >= 0 ? place : null }
-                place.dropping = s < 0 && !place.it.missing && !root.browser.actions.dropRefused(drag.urls, place.it.path)
+                place.dropping = s < 0 && !place.it.missing && !place.it.remote && !root.browser.actions.dropRefused(drag.urls, place.it.path)
             }
             onEntered: drag => {
                 if (!drag.hasUrls) { drag.accepted = false; return }
@@ -355,7 +359,7 @@ Item {
                 root.insertAt = -1
                 root.insertBy = null
                 if (s >= 0) root.browser.actions.bookmarkDropped(drop, root.fileIndex(s))
-                else if (!place.it.missing && !root.browser.actions.dropRefused(drop.urls, place.it.path)) root.browser.actions.drop(drop, place.it.path)
+                else if (!place.it.missing && !place.it.remote && !root.browser.actions.dropRefused(drop.urls, place.it.path)) root.browser.actions.drop(drop, place.it.path)
             }
         }
         // Held over a place while dragging, it opens, so the drop can go deeper.
@@ -381,7 +385,11 @@ Item {
         const out = []
         if (it.kind === "device" && !it.mounted) return [{ text: I18n.tr("Mount"), glyph: "hard_drive", run: () => root.open(it, false) }]
         out.push({ text: I18n.tr("Open in new tab"), glyph: "tab", run: () => root.open(it, true) })
-        if (it.kind !== "recent" && it.kind !== "trash") {
+        if (it.kind === "connect") return [{ text: it.name, glyph: it.glyph, run: () => root.open(it, false) }]
+        if (it.remote) {
+            out.push({ separator: true })
+            out.push({ text: I18n.tr("Copy address"), glyph: "link", run: () => root.browser.actions.copyText(it.path) })
+        } else if (it.kind !== "recent" && it.kind !== "trash") {
             out.push({ text: I18n.tr("Open in terminal"), glyph: "terminal", run: () => root.browser.actions.terminal(it.path) })
             out.push({ separator: true })
             out.push({ text: I18n.tr("Copy path"), glyph: "content_copy", run: () => root.browser.actions.copyText(it.path) })
@@ -405,9 +413,9 @@ Item {
         if (it.kind === "trash") out.push({ text: I18n.tr("Empty trash"), glyph: "delete_forever", danger: true, enabled: (it.count ?? 0) > 0, run: () => root.browser.actions.emptyTrash() })
         if ((it.kind === "device" && !it.root) || it.kind === "share") {
             out.push({ separator: true })
-            out.push({ text: it.removable ? I18n.tr("Eject") : I18n.tr("Unmount"), glyph: "eject", run: () => root.eject(it) })
+            out.push({ text: it.server ? I18n.tr("Disconnect") : it.removable ? I18n.tr("Eject") : I18n.tr("Unmount"), glyph: "eject", run: () => root.eject(it) })
         }
-        if (it.kind !== "recent" && it.kind !== "trash") out.push({ text: I18n.tr("Properties"), glyph: "info", keys: "Alt+Enter", run: () => root.browser.actions.propertiesOf([it.path]) })
+        if (it.kind !== "recent" && it.kind !== "trash" && !it.remote) out.push({ text: I18n.tr("Properties"), glyph: "info", keys: "Alt+Enter", run: () => root.browser.actions.propertiesOf([it.path]) })
         return out
     }
 
@@ -496,11 +504,11 @@ Item {
                 visible: !root.folded("devices")
                 Repeater { model: root.disks; delegate: Place {} }
             }
-            Heading { visible: root.shares.length > 0; text: I18n.tr("Network"); section: "network" }
+            Heading { text: I18n.tr("Network"); section: "network" }
             Column {
                 width: col.width
                 visible: !root.folded("network")
-                Repeater { model: root.shares; delegate: Place {} }
+                Repeater { model: root.shares.concat([root.connectPlace]); delegate: Place {} }
             }
         }
     }

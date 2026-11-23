@@ -10,6 +10,7 @@ mod list;
 mod markdown;
 mod mime;
 mod places;
+mod remote;
 mod search;
 mod thumbs;
 mod util;
@@ -49,6 +50,7 @@ pub struct Ctx {
     pub thumbs: thumbs::Thumbs,
     pub jobs: jobs::Registry,
     pub watch: watch::Watch,
+    pub talks: remote::Talks,
     cancels: Mutex<HashMap<String, Arc<AtomicBool>>>,
 }
 
@@ -183,6 +185,9 @@ fn handle(ctx: &Arc<Ctx>, req: Value) {
         "bookmark_add" | "bookmark_remove" | "bookmark_rename" | "bookmark_move" => places::bookmark_op(&op, &req),
         "mount" => places::mount(&req),
         "unmount" => places::unmount(&req),
+        // A server: waits for gio and for the person's answers on this request's own thread.
+        "connect" => remote::connect(ctx, &req),
+        "connect_answer" => remote::answer(ctx, &req),
         "recent" => Ok(places::recent(ctx)),
         "watch" => Ok(watch::set(ctx, &req)),
         "apps" => Ok(apps::apps_op(ctx, &req)),
@@ -207,6 +212,7 @@ fn main() {
         thumbs: thumbs::Thumbs::new(),
         jobs: jobs::Registry::default(),
         watch: watch::Watch::default(),
+        talks: remote::Talks::default(),
         cancels: Mutex::new(HashMap::new()),
     });
     thumbs::start(ctx.clone());

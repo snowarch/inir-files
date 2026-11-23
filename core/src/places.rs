@@ -50,8 +50,14 @@ pub fn bookmarks() -> Vec<Value> {
             let label = if name.is_empty() { util::name_of(&p) } else { name };
             Some(json!({"path": p.to_string_lossy(), "name": label, "exists": p.exists(), "remote": false}))
         } else if !uri.is_empty() {
-            // sftp://, smb:// ...: kept as they are, opened through gio.
-            Some(json!({"path": uri, "name": if name.is_empty() { uri.to_string() } else { name }, "exists": true, "remote": true}))
+            // sftp://, smb:// ...: kept as they are, opened through gio. Unnamed, one shows its last folder, or its server.
+            let label = if name.is_empty() {
+                let a = crate::remote::parse(uri).unwrap_or_default();
+                a.path.trim_end_matches('/').rsplit('/').next().filter(|s| !s.is_empty()).map(str::to_string).unwrap_or(if a.host.is_empty() { uri.to_string() } else { a.host })
+            } else {
+                name
+            };
+            Some(json!({"path": uri, "name": label, "exists": true, "remote": true}))
         } else {
             None
         }
@@ -75,7 +81,13 @@ fn write_bookmarks(list: &[(String, String)]) -> Result<(), String> {
 
 pub fn bookmark_op(op: &str, req: &Value) -> Result<Value, String> {
     let mut list: Vec<(String, String)> = bookmarks().iter().map(|b| (b["path"].as_str().unwrap_or("").to_string(), b["name"].as_str().unwrap_or("").to_string())).collect();
-    let path = req["path"].as_str().unwrap_or("").to_string();
+    let mut path = req["path"].as_str().unwrap_or("").to_string();
+    // A folder of a connected server is kept as its address: the folder is gone once the server is.
+    if op == "bookmark_add" && path.contains("/gvfs/") {
+        if let Some(uri) = crate::remote::uri_of(&path) {
+            path = uri;
+        }
+    }
     match op {
         "bookmark_add" => {
             if !list.iter().any(|(p, _)| *p == path) {
@@ -196,16 +208,16 @@ pub fn network() -> Vec<Value> {
             out.push(json!({"path": mount, "label": util::name_of(Path::new(&mount)), "source": source, "fstype": fstype, "size": size, "free": free, "kind": "share"}));
         }
     }
-    let uid = unsafe { libc::getuid() };
-    let gvfs = PathBuf::from(format!("/run/user/{uid}/gvfs"));
-    if let Ok(rd) = fs::read_dir(&gvfs) {
+    if let Ok(rd) = fs::read_dir(util::gvfs_dir()) {
         for de in rd.flatten() {
             let name = de.file_name().to_string_lossy().into_owned();
             let (scheme, rest) = name.split_once(':').unwrap_or(("", &name));
             let host = rest.split(',').find_map(|kv| kv.strip_prefix("host=").or_else(|| kv.strip_prefix("server="))).unwrap_or(rest);
+            // A backend with no host ("localtest:") goes by its scheme.
+            let host = if host.is_empty() { scheme } else { host };
             let share = rest.split(',').find_map(|kv| kv.strip_prefix("share=")).unwrap_or("");
-            let label = percent_encoding::percent_decode_str(&if share.is_empty() { host.to_string() } else { format!("{share} on {host}") }).decode_utf8_lossy().replace('_', " ");
-            out.push(json!({"path": de.path().to_string_lossy(), "label": label, "source": name, "fstype": scheme, "size": 0, "free": 0, "kind": if scheme == "mtp" || scheme == "gphoto2" { "phone" } else { "share" }}));
+            let decode = |s: &str| percent_encoding::percent_decode_str(s).decode_utf8_lossy().replace('_', " ");
+            out.push(json!({"path": de.path().to_string_lossy(), "label": decode(host), "host": decode(host), "share": decode(share), "source": name, "fstype": scheme, "size": 0, "free": 0, "kind": if scheme == "mtp" || scheme == "gphoto2" { "phone" } else { "share" }}));
         }
     }
     out

@@ -30,6 +30,8 @@ Singleton {
     signal sizeEvent(var data)
     signal checksumEvent(var data)
     signal failed(string op, string error)
+    // A server being connected wants an answer (a password, a choice): { token, kind, message, fields, choices }.
+    signal asked(var ask)
 
     function call(op: string, args: var, done: var): int {
         const id = root.nextId++
@@ -183,6 +185,7 @@ Singleton {
         case "dirsize": root.sizeEvent(m); break
         case "checksum": root.checksumEvent(m); break
         case "places": root.places = m; break
+        case "ask": root.asked(m); break
         }
     }
 

@@ -15,6 +15,20 @@ Item {
     implicitHeight: root.compact ? Theme.dp(28) : Theme.dp(34)
     implicitWidth: row.implicitWidth + (root.compact ? Theme.dp(22) : Theme.dp(30))
     opacity: root.enabled ? 1 : 0.4
+    activeFocusOnTab: root.enabled && root.visible
+    Keys.onReturnPressed: root.clicked()
+    Keys.onEnterPressed: root.clicked()
+    Keys.onSpacePressed: root.clicked()
+
+    Rectangle {
+        visible: root.activeFocus
+        anchors.fill: parent
+        anchors.margins: -Theme.dp(3)
+        radius: height / 2
+        color: "transparent"
+        border.width: Math.max(1, Theme.dp(2))
+        border.color: Theme.accent
+    }
 
     readonly property color base: root.kind === "solid" ? Theme.accent : root.kind === "danger" ? Theme.danger : root.kind === "quiet" ? Theme.fill : "transparent"
     readonly property color ink: root.kind === "solid" ? Theme.inkAccent : root.kind === "danger" ? "#ffffff" : Theme.ink
