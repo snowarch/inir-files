@@ -66,17 +66,18 @@ Inset {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onPressed: seg.QsWindow.window?.tips?.hide(seg)
+                    onPressed: { seg.spent = true; seg.QsWindow.window?.tips?.hide(seg) }
                     onClicked: root.chosen(seg.modelData.value)
                 }
+                property bool spent: false
                 Timer {
                     interval: seg.QsWindow.window?.tips?.delay ?? 650
-                    running: segMouse.containsMouse && !!seg.modelData.tip
+                    running: segMouse.containsMouse && !!seg.modelData.tip && !seg.spent
                     onTriggered: seg.QsWindow.window?.tips?.show(seg, seg.modelData.tip, seg.modelData.keys ?? "")
                 }
                 Connections {
                     target: segMouse
-                    function onContainsMouseChanged() { if (!segMouse.containsMouse) seg.QsWindow.window?.tips?.hide(seg) }
+                    function onContainsMouseChanged() { if (!segMouse.containsMouse) { seg.spent = false; seg.QsWindow.window?.tips?.hide(seg) } }
                 }
             }
         }

@@ -42,15 +42,17 @@ Item {
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
         cursorShape: Qt.PointingHandCursor
-        onPressed: root.QsWindow.window?.tips?.hide(root)
+        onPressed: { root.spent = true; root.QsWindow.window?.tips?.hide(root) }
         onClicked: m => root.clicked(m)
         onPressAndHold: root.pressAndHold()
     }
-    // The tip after a still moment over the button.
+    // The tip after a still moment over the button; once pressed, not again until the pointer comes back, so it never
+    // lies over the menu or sheet the press opened.
+    property bool spent: false
     Timer {
         interval: root.QsWindow.window?.tips?.delay ?? 650
-        running: root.hovered && root.tip.length > 0 && !mouse.pressed
+        running: root.hovered && root.tip.length > 0 && !root.spent
         onTriggered: root.QsWindow.window?.tips?.show(root, root.tip, root.keys)
     }
-    onHoveredChanged: if (!root.hovered) root.QsWindow.window?.tips?.hide(root)
+    onHoveredChanged: if (!root.hovered) { root.spent = false; root.QsWindow.window?.tips?.hide(root) }
 }
