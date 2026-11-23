@@ -66,16 +66,22 @@ Item {
         required property var entry
         property bool on: false
         property bool strong: false
+        property bool joinUp: false
+        property bool joinDown: false
         property bool dropping: false
         signal pressed(var mouse, Item from)
         width: root.colWidth
         height: root.rowHeight
         Rectangle {
+            readonly property real r: Theme.dp(8)
             anchors.fill: parent
             anchors.leftMargin: Theme.dp(5)
             anchors.rightMargin: Theme.dp(5)
-            radius: Theme.dp(8)
-            color: row.dropping ? Theme.selectionHover : row.on ? (row.strong ? Theme.accent : Theme.fillPress) : rowMouse.containsMouse ? Theme.fill : "transparent"
+            topLeftRadius: row.joinUp ? 0 : r
+            topRightRadius: row.joinUp ? 0 : r
+            bottomLeftRadius: row.joinDown ? 0 : r
+            bottomRightRadius: row.joinDown ? 0 : r
+            color: row.dropping ? Theme.selectionHover : row.on ? (row.strong ? (rowMouse.containsMouse ? Theme.selectionHover : Theme.selection) : Theme.fillPress) : rowMouse.containsMouse ? Theme.fill : "transparent"
             border.width: row.dropping ? Math.max(1, Theme.dp(1.5)) : 0
             border.color: Theme.accent
         }
@@ -96,7 +102,7 @@ Item {
             text: row.entry.name
             size: Theme.row
             elide: Text.ElideMiddle
-            color: row.on && row.strong ? Theme.inkAccent : Theme.ink
+            color: Theme.ink
         }
         Glyph {
             id: chevron
@@ -106,7 +112,7 @@ Item {
             visible: row.entry.dir
             name: "chevron_right"
             size: Theme.dp(16)
-            color: row.on && row.strong ? Theme.inkAccent : Theme.ink3
+            color: row.on ? Theme.ink2 : Theme.ink3
         }
         MouseArea {
             id: rowMouse
@@ -215,6 +221,8 @@ Item {
                         entry: model
                         on: { void root.folder.selRev; return root.folder.isSel(model.path) }
                         strong: root.pane.active
+                        joinUp: { void root.folder.selRev; const e = root.folder.all[hereRow.index - 1]; return hereRow.on && !!e && root.folder.isSel(e.path) }
+                        joinDown: { void root.folder.selRev; const e = root.folder.all[hereRow.index + 1]; return hereRow.on && !!e && root.folder.isSel(e.path) }
                         property string uris: ""
                         onPressed: (mouse, from) => {
                             root.pane.pressItem(hereRow.index, mouse, from)

@@ -2,8 +2,8 @@ import QtQuick
 import qs.services
 import qs.kit
 
-// One entry of the list: its picture and name, then the columns the place shows. Chosen, the row turns solid accent
-// while its pane is the active one.
+// One entry of the list: its picture and name, then the columns the place shows. Chosen, the row takes the selection's
+// tint; chosen rows next to each other join into one plate, rounded only at its ends.
 Item {
     id: root
     required property int index
@@ -26,14 +26,14 @@ Item {
 
     readonly property var folder: root.pane.folder
     readonly property bool chosen: { void root.folder.selRev; return root.folder.isSel(root.path) }
-    readonly property bool focused: root.pane.activeFocus && root.folder.current === root.index && root.folder.selCount !== 1
+    readonly property bool focused: root.pane.activeFocus && root.folder.current === root.index && !root.chosen
     readonly property bool lit: root.pane.active
     readonly property bool renaming: root.pane.browser.renaming === root.path
     readonly property bool cut: { void root.pane.browser.actions.clipRev; return root.pane.browser.actions.isCut(root.path) }
     readonly property real nameWidth: root.columns.length > 0 ? root.columns[0].width : root.width
     readonly property bool hovered: hit.containsMouse
-    readonly property color inkMain: root.chosen && root.lit ? Theme.inkAccent : Theme.ink
-    readonly property color inkSide: root.chosen && root.lit ? Theme.alpha(Theme.inkAccent, 0.78) : Theme.ink2
+    readonly property bool joinUp: { void root.folder.selRev; const e = root.folder.all[root.index - 1]; return root.chosen && !!e && root.folder.isSel(e.path) }
+    readonly property bool joinDown: { void root.folder.selRev; const e = root.folder.all[root.index + 1]; return root.chosen && !!e && root.folder.isSel(e.path) }
     property bool dropping: false
     property string uris: ""
 
@@ -51,11 +51,15 @@ Item {
     }
 
     Rectangle {
+        readonly property real r: Theme.dp(8)
         anchors.fill: parent
         anchors.leftMargin: Theme.dp(6)
         anchors.rightMargin: Theme.dp(6)
-        radius: Theme.dp(8)
-        color: root.dropping ? Theme.selectionHover : root.chosen ? (root.lit ? Theme.accent : Theme.fillPress) : root.hovered ? Theme.fill : "transparent"
+        topLeftRadius: root.joinUp ? 0 : r
+        topRightRadius: root.joinUp ? 0 : r
+        bottomLeftRadius: root.joinDown ? 0 : r
+        bottomRightRadius: root.joinDown ? 0 : r
+        color: root.dropping ? Theme.selectionHover : root.chosen ? (root.lit ? (root.hovered ? Theme.selectionHover : Theme.selection) : Theme.fillPress) : root.hovered ? Theme.fill : "transparent"
         border.width: root.dropping || root.focused ? Math.max(1, Theme.dp(1.5)) : 0
         border.color: root.dropping ? Theme.accent : Theme.alpha(Theme.accent, 0.55)
     }
@@ -84,7 +88,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.name
                 size: Theme.row
-                color: root.inkMain
+                color: Theme.ink
                 elide: Text.ElideMiddle
                 opacity: root.cut ? 0.6 : 1
             }
@@ -116,7 +120,7 @@ Item {
                     horizontalAlignment: modelData.key === "size" ? Text.AlignRight : Text.AlignLeft
                     text: root.value(modelData.key)
                     size: Theme.body
-                    color: root.inkSide
+                    color: Theme.ink2
                     font.family: modelData.key === "snippet" ? Theme.mono : Theme.sans
                     font.features: modelData.key === "size" || modelData.key === "mtime" || modelData.key === "deleted" ? { "tnum": 1 } : {}
                     elide: modelData.key === "where" || modelData.key === "origin" ? Text.ElideMiddle : Text.ElideRight

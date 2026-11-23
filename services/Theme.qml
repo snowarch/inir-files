@@ -120,8 +120,10 @@ Singleton {
         return root.ink
     }
     readonly property color accentPlate: root.alpha(root.accent, root.light ? 0.13 : 0.16)
-    readonly property color selection: root.alpha(root.accent, root.light ? 0.16 : 0.2)
-    readonly property color selectionHover: root.alpha(root.accent, root.light ? 0.22 : 0.27)
+    // What is chosen: the accent laid thin over the ground, never solid, so a folder drawn in the accent and the text
+    // on it keep their own colours. A pane not in use shows its choice in grey.
+    readonly property color selection: root.alpha(root.accent, root.light ? 0.2 : 0.24)
+    readonly property color selectionHover: root.alpha(root.accent, root.light ? 0.27 : 0.31)
     readonly property color secondary: root.key("secondary", "#bfc6dc", "#565e71")
     readonly property color tertiary: root.key("tertiary", "#debcdf", "#715573")
     readonly property color danger: root.light ? "#d70015" : "#ff453a"

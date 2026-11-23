@@ -2,8 +2,7 @@ import QtQuick
 import qs.services
 import qs.kit
 
-// One entry of the grid: its picture over its name. Chosen, the picture sits on a plate and the name turns into a solid
-// accent pill. A folder takes what is dropped on it and opens when a drag rests over it.
+// One entry of the grid: its picture over its name. Chosen, the picture and the name sit on the selection's tint. A folder takes what is dropped on it and opens when a drag rests over it.
 Item {
     id: root
     required property int index
@@ -16,7 +15,7 @@ Item {
 
     readonly property var folder: root.pane.folder
     readonly property bool chosen: { void root.folder.selRev; return root.folder.isSel(root.path) }
-    readonly property bool focused: root.pane.activeFocus && root.folder.current === root.index && root.folder.selCount !== 1
+    readonly property bool focused: root.pane.activeFocus && root.folder.current === root.index && !root.chosen
     readonly property bool lit: root.pane.active
     readonly property bool renaming: root.pane.browser.renaming === root.path
     readonly property bool cut: { void root.pane.browser.actions.clipRev; return root.pane.browser.actions.isCut(root.path) }
@@ -39,7 +38,7 @@ Item {
         width: root.iconSize + Theme.dp(18)
         height: width
         radius: Math.min(Theme.dp(16), width * 0.18)
-        color: root.dropping ? Theme.selectionHover : root.chosen ? (root.lit ? Theme.selection : Theme.fill) : root.hovered ? Theme.fill : "transparent"
+        color: root.dropping ? Theme.selectionHover : root.chosen ? (root.lit ? (root.hovered ? Theme.selectionHover : Theme.selection) : Theme.fillPress) : root.hovered ? Theme.fill : "transparent"
         border.width: root.dropping || root.focused ? Math.max(1, Theme.dp(1.5)) : 0
         border.color: root.dropping ? Theme.accent : Theme.alpha(Theme.accent, 0.55)
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.OutCubic } }
@@ -63,7 +62,7 @@ Item {
         width: label.contentWidth + Theme.dp(12)
         height: label.contentHeight + Theme.dp(4)
         radius: Math.min(Theme.dp(8), height / 2)
-        color: root.chosen ? (root.lit ? Theme.accent : Theme.accentPlate) : "transparent"
+        color: root.chosen ? (root.lit ? (root.hovered ? Theme.selectionHover : Theme.selection) : Theme.fillPress) : "transparent"
     }
     Txt {
         id: label
@@ -77,7 +76,7 @@ Item {
         wrapMode: Text.WrapAtWordBoundaryOrAnywhere
         maximumLineCount: root.chosen && root.folder.selCount === 1 ? 5 : 2
         elide: Text.ElideRight
-        color: root.chosen && root.lit ? Theme.inkAccent : root.chosen ? Theme.accentInk : Theme.ink
+        color: Theme.ink
         opacity: root.cut ? 0.6 : 1
     }
 
