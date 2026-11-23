@@ -27,8 +27,9 @@ Inset {
             out = [{ path: home, name: I18n.tr("Home"), glyph: "home" }]
             rest = base.slice(home.length)
         } else {
-            out = [{ path: "/", name: Core.places.host || I18n.tr("Computer"), glyph: "hard_drive" }]
-            rest = base
+            // Inside a disk or a share the path starts at it; elsewhere at the computer. Both as the rail names them.
+            out = [root.mountOf(base) ?? { path: "/", name: I18n.tr("Computer"), glyph: "computer" }]
+            rest = out[0].path === "/" ? base : base.slice(out[0].path.length)
         }
         let at = out[0].path
         for (const part of rest.split("/")) {
@@ -38,6 +39,17 @@ Inset {
         }
         if (f.mode === "search") out.push({ path: "", name: I18n.tr("Results for “%1”", f.query), glyph: "search" })
         return out
+    }
+
+    function mountOf(path: string): var {
+        let best = null
+        const take = (p, name, glyph) => {
+            if (p && p !== "/" && (path === p || path.startsWith(p + "/")) && (!best || p.length > best.path.length)) best = { path: p, name: name, glyph: glyph }
+        }
+        for (const d of Core.places.devices ?? []) if (d.mounted && !d.root)
+            take(d.path, d.label || d.model || Fmt.name(d.path), d.tran === "usb" || d.removable ? "usb" : d.fstype === "iso9660" || d.fstype === "udf" ? "album" : "hard_drive")
+        for (const n of Core.places.network ?? []) take(n.path, n.label, n.kind === "phone" ? "smartphone" : n.fstype === "sftp" || n.fstype === "fuse.sshfs" ? "dns" : "lan")
+        return best
     }
 
     // Steps that do not fit fold into one "…" step after the first; the newest stay in view.
