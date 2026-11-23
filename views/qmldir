@@ -11,6 +11,7 @@ NameEdit 1.0 NameEdit.qml
 Band 1.0 Band.qml
 Rail 1.0 Rail.qml
 Head 1.0 Head.qml
+Filters 1.0 Filters.qml
 PathBar 1.0 PathBar.qml
 TabStrip 1.0 TabStrip.qml
 TabPage 1.0 TabPage.qml

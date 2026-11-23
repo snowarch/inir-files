@@ -166,9 +166,19 @@ FloatingWindow {
                 width: parent.width
                 height: implicitHeight
             }
+            Filters {
+                id: filters
+                browser: root
+                anchors.top: headItem.bottom
+                width: parent.width
+                height: filters.shown ? implicitHeight : 0
+                visible: height > 0
+                clip: true
+                Behavior on height { NumberAnimation { duration: Theme.normal; easing.type: Easing.OutCubic } }
+            }
             Item {
                 id: pages
-                anchors.top: headItem.bottom
+                anchors.top: filters.bottom
                 anchors.bottom: status.top
                 width: parent.width
             }

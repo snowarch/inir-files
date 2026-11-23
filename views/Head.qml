@@ -159,14 +159,6 @@ Item {
                 Keys.onDownPressed: { root.pane.forceActiveFocus(); if (root.folder.model.count > 0) root.folder.only(0) }
             }
         }
-        Act {
-            visible: root.searchOpen
-            anchors.verticalCenter: parent.verticalCenter
-            glyph: "text_snippet"
-            tip: root.folder && root.folder.content ? I18n.tr("Searching inside files") : I18n.tr("Search inside files")
-            on: root.folder ? root.folder.content : false
-            onClicked: root.folder.content = !root.folder.content
-        }
         Segments {
             visible: !root.compact
             anchors.verticalCenter: parent.verticalCenter

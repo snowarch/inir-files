@@ -196,7 +196,7 @@ FocusScope {
         const f = folder
         if (f.error.length > 0) return "error"
         if (f.loading || f.model.count > 0) return ""
-        if (f.mode === "search") return f.searching ? "searching" : (f.query.length > 0 ? "nothing" : "")
+        if (f.mode === "search") return f.searching ? "searching" : f.found.length > 0 ? "filtered" : (f.query.length > 0 ? "nothing" : "")
         return f.mode
     }
     Item {
@@ -218,7 +218,7 @@ FocusScope {
                 Glyph {
                     anchors.centerIn: parent
                     visible: root.blank !== "searching"
-                    name: ({ error: folder.error === "denied" ? "lock" : "error", searching: "search", nothing: "search_off", trash: "delete", recent: "schedule", folder: "folder_open" })[root.blank] ?? "folder_open"
+                    name: ({ error: folder.error === "denied" ? "lock" : "error", searching: "search", nothing: "search_off", filtered: "filter_alt_off", trash: "delete", recent: "schedule", folder: "folder_open" })[root.blank] ?? "folder_open"
                     size: Theme.dp(34)
                     color: Theme.ink3
                 }
@@ -242,6 +242,7 @@ FocusScope {
                     case "error": return folder.error === "denied" ? I18n.tr("No permission to open this folder") : folder.error === "missing" ? I18n.tr("This folder no longer exists") : I18n.tr("This place could not be read")
                     case "searching": return I18n.tr("Searching")
                     case "nothing": return I18n.tr("Nothing matches “%1”", folder.query)
+                    case "filtered": return I18n.tr("Nothing of this kind")
                     case "trash": return I18n.tr("The trash is empty")
                     case "recent": return I18n.tr("No recent files")
                     }
@@ -258,6 +259,7 @@ FocusScope {
                     case "error": return folder.error === "denied" || folder.error === "missing" ? Fmt.pretty(folder.path) : Errors.text(folder.error)
                     case "searching": return I18n.tr("%1 items checked", Fmt.num(folder.scanned, 0))
                     case "nothing": return folder.content ? I18n.tr("No file below %1 holds this text.", Fmt.pretty(folder.searchRoot)) : I18n.tr("No name below %1 holds these words. Try the text inside files.", Fmt.pretty(folder.searchRoot))
+                    case "filtered": return I18n.n("%1 result of another kind.", "%1 results of other kinds.", folder.found.length)
                     case "trash": return I18n.tr("What you delete waits here until you empty it.")
                     case "recent": return I18n.tr("Files you open in your apps show up here.")
                     }
@@ -285,6 +287,12 @@ FocusScope {
                     text: I18n.tr("Search inside files")
                     glyph: "manage_search"
                     onClicked: folder.content = true
+                }
+                Pill {
+                    visible: root.blank === "filtered"
+                    text: I18n.tr("Show all kinds")
+                    glyph: "filter_alt_off"
+                    onClicked: folder.filterKind("")
                 }
                 Pill {
                     visible: root.blank === "error" && folder.error === "missing"

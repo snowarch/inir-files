@@ -25,7 +25,10 @@ Item {
             if (f.selCount === 1 && chosen[0]) text = chosen[0].name + " · " + (chosen[0].dir ? (chosen[0].items >= 0 ? Fmt.items(chosen[0].items) : I18n.tr("Folder")) : Fmt.size(chosen[0].size))
             return text
         }
-        if (f.mode === "search") return (f.searching ? I18n.tr("Searching · ") : "") + I18n.n("%1 result", "%1 results", count)
+        if (f.mode === "search") {
+            const found = f.kindFilter.length > 0 ? I18n.tr("%1 of %2 results", Fmt.num(count, 0), Fmt.num(f.found.length, 0)) : I18n.n("%1 result", "%1 results", count)
+            return (f.searching ? I18n.tr("Searching · ") : "") + found
+        }
         let text = Fmt.items(count)
         if (f.hiddenCount > 0 && !f.showHidden) text += " · " + I18n.n("%1 hidden", "%1 hidden", f.hiddenCount)
         return text

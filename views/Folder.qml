@@ -48,6 +48,10 @@ Item {
     property bool searching: false
     property int scanned: 0
     property string token: ""
+    // Every result of the search; all holds those of the kind asked for.
+    property var found: []
+    property var kindCounts: ({})
+    property string kindFilter: ""
 
     // The core reports changes in the place on screen.
     readonly property string watched: root.mode === "folder" ? root.path : root.mode === "trash" ? (Core.places.trashDir ?? "") : ""
@@ -235,10 +239,17 @@ Item {
             if (b.token !== root.token) return
             const list = (b.entries ?? []).map(root.normal)
             if (list.length > 0) {
-                const start = root.all.length
-                root.all = root.all.concat(list)
-                entries.append(list)
-                for (let k = 0; k < list.length; k++) root.at[list[k].path] = start + k
+                root.found = root.found.concat(list)
+                const counts = Object.assign({}, root.kindCounts)
+                for (const e of list) { const g = root.groupOf(e); counts[g] = (counts[g] ?? 0) + 1 }
+                root.kindCounts = counts
+                const shown = root.kindFilter.length > 0 ? list.filter(root.fits) : list
+                if (shown.length > 0) {
+                    const start = root.all.length
+                    root.all = root.all.concat(shown)
+                    entries.append(shown)
+                    for (let k = 0; k < shown.length; k++) root.at[shown[k].path] = start + k
+                }
             }
             root.scanned = b.scanned ?? root.scanned
             if (b.done) root.searching = false
@@ -267,6 +278,8 @@ Item {
         root.current = -1
         root.all = []
         root.at = ({})
+        root.found = []
+        root.kindCounts = ({})
         entries.clear()
         root.reset()
         root.scanned = 0
@@ -279,6 +292,9 @@ Item {
         if (root.token.length > 0) Core.call("cancel", { token: root.token })
         root.token = ""
         root.searching = false
+        root.found = []
+        root.kindCounts = ({})
+        root.kindFilter = ""
         if (back) {
             root.mode = "folder"
             root.path = root.searchRoot
@@ -287,6 +303,26 @@ Item {
         }
     }
     onContentChanged: if (root.mode === "search") root.runSearch()
+
+    // The kind a result counts under in the search's filter.
+    function groupOf(e: var): string {
+        if (e.dir) return "folder"
+        return ({ document: "document", pdf: "document", text: "document", image: "image", video: "video", audio: "audio",
+            archive: "archive", disk: "archive", code: "code", executable: "code" })[e.kind] ?? "other"
+    }
+    function fits(e: var): bool { return root.kindFilter.length === 0 || root.groupOf(e) === root.kindFilter }
+    function filterKind(kind: string): void {
+        if (root.kindFilter === kind) return
+        root.kindFilter = kind
+        if (root.mode !== "search") return
+        root.clearSel()
+        root.current = -1
+        root.all = root.found.filter(root.fits)
+        entries.clear()
+        entries.append(root.all)
+        root.reindex()
+        root.reset()
+    }
 
     // ---- choosing
     function isSel(path: string): bool { return root.selected[path] === true }
