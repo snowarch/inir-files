@@ -61,6 +61,8 @@ Item {
     Component.onDestruction: Core.dropWatch(root.held)
 
     signal reset()
+    // A reading is in place, with what is chosen in it: after reset, and after a quiet update.
+    signal applied()
     signal revealed(int index)
 
     ListModel { id: entries }
@@ -163,6 +165,7 @@ Item {
             entries.clear()
             root.reindex()
             root.reset()
+            root.applied()
             return
         }
         root.error = ""
@@ -197,6 +200,7 @@ Item {
             if (entries.count > 0) root.only(0)
         } else if (root.current >= entries.count) root.current = entries.count - 1
         root.selRev++
+        root.applied()
     }
 
     // The new list against the old one, which the rows on screen mirror: both are in the same order, so one pass finds

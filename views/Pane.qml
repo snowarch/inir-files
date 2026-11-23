@@ -214,9 +214,10 @@ FocusScope {
         // Qt leaves an automatic drag active once it ends: the next one starts only from false.
         Drag.onDragFinished: carrier.Drag.active = false
     }
-    // A press readies the drag: the chosen things, and the picture of what was pressed under the pointer.
-    function ready(icon: Item, side: real): void {
-        carrier.uris = folder.chosenPaths().map(p => Fmt.url(p)).join("\r\n")
+    // A press readies the drag: the chosen things, or the paths given, and the picture of what was pressed under the
+    // pointer.
+    function ready(icon: Item, side: real, paths: var): void {
+        carrier.uris = (paths ?? folder.chosenPaths()).map(p => Fmt.url(p)).join("\r\n")
         carrier.Drag.hotSpot.x = side / 2
         carrier.Drag.hotSpot.y = side / 2
         carrier.Drag.imageSource = ""
