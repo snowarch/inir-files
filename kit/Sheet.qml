@@ -15,6 +15,8 @@ FocusScope {
     default property alias body: bodyCol.data
     property alias actions: actionsRow.data
     property bool closing: false
+    // The card's own colour, for what fades into it.
+    readonly property color face: card.color
     signal dismissed()
 
     function close(): void {
