@@ -64,8 +64,12 @@ Item {
     }
 
     // What the interface reads itself; anything else (PDF pages, AVIF, HEIC, JPEG XL, RAW ...) the core draws for it.
-    readonly property bool qtReads: ["image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp", "image/svg+xml", "image/tiff",
-        "image/x-icon", "image/vnd.microsoft.icon", "image/x-tga", "image/vnd.wap.wbmp"].includes(root.mime)
+    readonly property var qtTypes: ["image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp", "image/svg+xml", "image/tiff",
+        "image/x-icon", "image/vnd.microsoft.icon", "image/x-tga", "image/vnd.wap.wbmp"]
+    readonly property bool qtReads: root.qtTypes.includes(root.mime)
+    // The file's own address, worked out from the entry alone: a face about to give way to another kind never asks Qt
+    // for a file that is not its kind.
+    function direct(e: var): string { return e && e.kind === "image" && root.qtTypes.includes(e.mime) ? Fmt.url(e.path) + "?" + (e.mtime ?? 0) : "" }
     readonly property int pages: root.kind === "pdf" ? Math.max(1, Number(root.info.pdf?.pages ?? 1)) : 1
 
     component Icon: Item {
@@ -178,7 +182,7 @@ Item {
             Image {
                 id: img
                 anchors.fill: parent
-                source: root.qtReads ? Fmt.url(root.path) + "?" + (root.entry?.mtime ?? 0) : pic.drawn.length > 0 ? Fmt.url(pic.drawn) : ""
+                source: root.qtReads ? root.direct(root.entry) : pic.drawn.length > 0 ? Fmt.url(pic.drawn) : ""
                 fillMode: Image.PreserveAspectFit
                 asynchronous: true
                 cache: false
@@ -219,7 +223,7 @@ Item {
             AnimatedImage {
                 id: anim
                 anchors.fill: parent
-                source: Fmt.url(root.path) + "?" + (root.entry?.mtime ?? 0)
+                source: root.direct(root.entry)
                 fillMode: Image.PreserveAspectFit
                 asynchronous: true
                 cache: false
@@ -392,7 +396,7 @@ Item {
     Component {
         id: specimen
         Item {
-            FontLoader { id: face; source: Fmt.url(root.path) }
+            FontLoader { id: face; source: root.entry?.kind === "font" ? Fmt.url(root.entry.path) : "" }
             Column {
                 anchors.fill: parent
                 spacing: Theme.dp(6)
