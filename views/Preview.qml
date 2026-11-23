@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic as QQC
+import Quickshell
 import qs.services
 import qs.kit
 
@@ -70,7 +71,7 @@ Item {
     })
     readonly property var facts: {
         const out = []
-        const add = (key, value, run) => { if (value !== undefined && value !== null && String(value).length > 0) out.push({ key: key, value: String(value), run: run ?? null }) }
+        const add = (key, value, run, path) => { if (value !== undefined && value !== null && String(value).length > 0) out.push({ key: key, value: String(value), run: run ?? null, path: path === true }) }
         const section = text => out.push({ section: text })
         if (root.many) {
             const counts = {}
@@ -92,7 +93,7 @@ Item {
             const bytes = i.size ?? e.size
             add(I18n.tr("Size"), Fmt.size(bytes) + (bytes >= 1000 ? " (" + I18n.n("%1 byte", "%1 bytes", bytes) + ")" : ""))
         }
-        if (i.width > 0) add(I18n.tr("Dimensions"), i.width + " × " + i.height + " · " + Fmt.num(i.width * i.height / 1e6, 1) + " MP")
+        if (i.width > 0) add(I18n.tr("Dimensions"), i.width + " × " + i.height + (i.width * i.height >= 1e6 ? " · " + Fmt.num(i.width * i.height / 1e6, 1) + " MP" : ""))
         const m = i.media
         if (m) {
             section(e.kind === "audio" ? I18n.tr("Sound") : I18n.tr("Film"))
@@ -149,9 +150,9 @@ Item {
         if (i.btime > 0) add(I18n.tr("Created"), Fmt.full(i.btime))
         if (e.deleted > 0) add(I18n.tr("Deleted"), Fmt.full(e.deleted))
         section(I18n.tr("Place"))
-        if (e.origin) add(I18n.tr("From"), Fmt.pretty(e.origin))
-        else if (i.parent) add(I18n.tr("Folder"), Fmt.pretty(i.parent), () => root.pane.folder.go(i.parent, true))
-        if (i.target) add(I18n.tr("Points to"), Fmt.pretty(i.target))
+        if (e.origin) add(I18n.tr("From"), Fmt.pretty(e.origin), null, true)
+        else if (i.parent) add(I18n.tr("Folder"), Fmt.pretty(i.parent), () => root.pane.folder.go(i.parent, true), true)
+        if (i.target) add(I18n.tr("Points to"), Fmt.pretty(i.target), null, true)
         if (i.modeText) add(I18n.tr("Access"), i.modeText + " · " + i.owner + (i.group && i.group !== i.owner ? ":" + i.group : ""))
         return out
     }
@@ -226,7 +227,8 @@ Item {
                     font.family: Theme.title
                     size: Theme.head
                     strong: true
-                    wrapMode: Text.WrapAnywhere
+                    // Breaks between words; a name with no spaces breaks anywhere.
+                    wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                     maximumLineCount: 3
                     horizontalAlignment: Text.AlignHCenter
                 }
@@ -307,17 +309,24 @@ Item {
                             text: parent.modelData.value ?? ""
                             color: parent.modelData.run ? Theme.accentInk : Theme.ink
                             size: Theme.small
-                            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-                            elide: Text.ElideNone
+                            // A path keeps one line and loses its middle; the whole path shows in a tip.
+                            wrapMode: parent.modelData.path ? Text.NoWrap : Text.WrapAtWordBoundaryOrAnywhere
+                            elide: parent.modelData.path ? Text.ElideMiddle : Text.ElideNone
                             verticalAlignment: Text.AlignTop
                             font.underline: !!parent.modelData.run && valueMouse.containsMouse
                             MouseArea {
                                 id: valueMouse
                                 anchors.fill: parent
-                                enabled: !!parent.parent.modelData.run
+                                enabled: !!parent.parent.modelData.run || value.truncated
                                 hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: parent.parent.modelData.run()
+                                cursorShape: parent.parent.modelData.run ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                onClicked: if (parent.parent.modelData.run) parent.parent.modelData.run()
+                                onContainsMouseChanged: if (!containsMouse) value.QsWindow.window?.tips?.hide(value)
+                            }
+                            Timer {
+                                interval: value.QsWindow.window?.tips?.delay ?? 650
+                                running: valueMouse.containsMouse && value.truncated
+                                onTriggered: value.QsWindow.window?.tips?.show(value, value.text, "")
                             }
                         }
                     }
