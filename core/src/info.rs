@@ -315,9 +315,10 @@ pub fn text_head(path: &Path, limit: usize) -> Value {
 pub fn dirsize(ctx: &Ctx, token: &str, paths: Vec<PathBuf>, stop: Arc<AtomicBool>) {
     let (mut size, mut files, mut dirs) = (0u64, 0u64, 0u64);
     let mut seen = std::collections::HashSet::new();
-    let mut stack = paths;
+    // The places asked about are not part of what they hold: a folder of one file holds one item.
+    let mut stack: Vec<(PathBuf, bool)> = paths.into_iter().map(|p| (p, true)).collect();
     let mut last = std::time::Instant::now();
-    while let Some(p) = stack.pop() {
+    while let Some((p, top)) = stack.pop() {
         if stop.load(Ordering::Relaxed) {
             return;
         }
@@ -326,9 +327,9 @@ pub fn dirsize(ctx: &Ctx, token: &str, paths: Vec<PathBuf>, stop: Arc<AtomicBool
             continue;
         }
         if m.is_dir() {
-            dirs += 1;
+            dirs += u64::from(!top);
             if let Ok(rd) = fs::read_dir(&p) {
-                stack.extend(rd.flatten().map(|d| d.path()));
+                stack.extend(rd.flatten().map(|d| (d.path(), false)));
             }
         } else {
             files += 1;

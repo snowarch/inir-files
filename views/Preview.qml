@@ -222,7 +222,7 @@ Item {
                 spacing: Theme.dp(3)
                 Txt {
                     width: parent.width
-                    text: root.many ? Fmt.items(root.list.length) : root.placeOnly ? root.placeFace.title ?? "" : root.entry ? root.entry.name || "/" : ""
+                    text: root.many ? Fmt.items(root.list.length) : root.placeOnly ? root.placeFace.title ?? "" : root.entry ? (root.entry.path === Core.home ? I18n.tr("Home") : root.entry.name || "/") : ""
                     font.family: Theme.title
                     size: Theme.head
                     strong: true

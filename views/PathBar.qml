@@ -40,6 +40,26 @@ Inset {
         return out
     }
 
+    // Steps that do not fit fold into one "…" step after the first; the newest stay in view.
+    FontMetrics { id: fm; font.family: Theme.sans; font.pixelSize: Theme.row }
+    FontMetrics { id: fmStrong; font.family: Theme.sans; font.pixelSize: Theme.row; font.weight: Font.DemiBold }
+    function stepWidth(i: int): real {
+        const c = root.crumbs[i]
+        const text = Math.min((i === root.crumbs.length - 1 ? fmStrong : fm).advanceWidth(c.name), Theme.dp(220))
+        return (i > 0 ? Theme.dp(16) : 0) + Theme.dp(16) + (c.glyph.length > 0 ? Theme.dp(22) : 0) + Math.ceil(text)
+    }
+    readonly property int folded: {
+        const n = root.crumbs.length
+        if (n < 3) return 0
+        const w = root.crumbs.map((c, i) => root.stepWidth(i))
+        let total = w.reduce((a, b) => a + b, 0)
+        if (total <= flick.width) return 0
+        let k = 0
+        total += Theme.dp(48)
+        while (k < n - 2 && total > flick.width) { k++; total -= w[k] }
+        return k
+    }
+
     function edit(): void {
         if (!root.folder) return
         field.text = root.folder.mode === "folder" ? Fmt.pretty(root.folder.path) : ""
@@ -119,6 +139,7 @@ Inset {
                     required property var modelData
                     required property int index
                     readonly property bool last: crumb.index === root.crumbs.length - 1
+                    visible: crumb.index === 0 || crumb.index > root.folded
                     height: steps.height
                     Glyph {
                         visible: crumb.index > 0
@@ -184,6 +205,30 @@ Inset {
                             onDropped: drop => { plate.dropping = false; spring.stop(); root.browser.actions.drop(drop, crumb.modelData.path) }
                         }
                         Timer { id: spring; interval: 900; onTriggered: { plate.dropping = false; root.folder.go(crumb.modelData.path) } }
+                    }
+                    // The folded steps, nearest first.
+                    Glyph {
+                        visible: crumb.index === 0 && root.folded > 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "chevron_right"
+                        size: Theme.dp(16)
+                        color: Theme.ink3
+                    }
+                    Rectangle {
+                        id: morePlate
+                        visible: crumb.index === 0 && root.folded > 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        height: Theme.dp(28)
+                        width: Theme.dp(32)
+                        radius: Theme.dp(9)
+                        color: moreMouse.pressed ? Theme.fillPress : moreMouse.containsMouse ? Theme.fillHover : "transparent"
+                        Glyph { anchors.centerIn: parent; name: "more_horiz"; size: Theme.dp(18); color: Theme.ink2 }
+                        MouseArea {
+                            id: moreMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: root.browser.menus.openAt(root.crumbs.slice(1, root.folded + 1).reverse().map(c => ({ text: c.name, glyph: "folder", run: () => root.folder.go(c.path) })), morePlate, true)
+                        }
                     }
                 }
             }
