@@ -20,6 +20,9 @@ Item {
     property bool playing: false
     property int page: 0
     property bool source: false
+    // A folder in the large look: what it holds, read once the arrows rest on it.
+    property var held: null
+    property string heldError: ""
 
     readonly property real ratio: {
         const w = root.info.width || root.info.media?.video?.width || 0
@@ -38,7 +41,7 @@ Item {
     }
 
     readonly property string key: root.path + "|" + (root.entry?.mtime ?? 0)
-    function reset(): void { root.info = ({}); root.text = null; root.playing = root.large && (root.kind === "video" || root.kind === "audio"); root.page = 0; root.source = false }
+    function reset(): void { root.info = ({}); root.text = null; root.held = null; root.heldError = ""; root.playing = root.large && (root.kind === "video" || root.kind === "audio"); root.page = 0; root.source = false }
     onPathChanged: root.reset()
     Component.onCompleted: { root.reset(); fetch.restart() }
     onKeyChanged: fetch.restart()
@@ -51,6 +54,12 @@ Item {
             if (p.length === 0) return
             Core.call("info", { path: p }, r => { if (r.ok && p === root.path) root.info = r })
             if (root.textual) Core.call("text", { path: p, limit: root.large ? 1048576 : 98304 }, r => { if (r.ok && p === root.path) root.text = r })
+            if (root.large && root.kind === "folder")
+                Core.call("list", { path: p, hidden: Prefs.get("hidden"), sort: Prefs.get("sort"), desc: Prefs.get("desc"), dirsFirst: Prefs.get("dirsFirst"), counts: false }, r => {
+                    if (p !== root.path) return
+                    root.heldError = r.ok ? "" : r.error
+                    root.held = r.ok ? (r.entries ?? []) : []
+                })
         }
     }
 
@@ -81,12 +90,67 @@ Item {
             case "font": return specimen
             case "archive": return archive
             case "app": return app
+            case "folder": return root.large ? peek : icon
             }
             return icon
         }
     }
 
     Component { id: icon; Icon {} }
+
+    // A folder looked into without going in: its things as the grid lays them out, pictures as pictures.
+    Component {
+        id: peek
+        Item {
+            id: pk
+            Txt {
+                anchors.centerIn: parent
+                visible: root.held !== null && root.held.length === 0
+                text: root.heldError.length > 0 ? Errors.text(root.heldError) : I18n.tr("This folder is empty")
+                size: Theme.row
+                color: Qt.rgba(1, 1, 1, 0.62)
+            }
+            GridView {
+                id: grid
+                // A few things large, many smaller: the folder fills the look either way.
+                readonly property int n: (root.held ?? []).length
+                readonly property real side: Theme.dp(grid.n <= 6 ? 148 : grid.n <= 24 ? 108 : 84)
+                readonly property int across: Math.max(1, Math.min(grid.n, Math.floor(pk.width / grid.cellWidth)))
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: grid.across * grid.cellWidth
+                height: Math.min(pk.height, grid.contentHeight)
+                y: Math.max(0, Math.round((pk.height - grid.height) / 2))
+                cellWidth: grid.side + Theme.dp(48)
+                cellHeight: grid.side + Theme.dp(60)
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                model: root.held ?? []
+                delegate: Item {
+                    id: thing
+                    required property var modelData
+                    width: grid.cellWidth
+                    height: grid.cellHeight
+                    FileIcon {
+                        x: Math.round((thing.width - width) / 2)
+                        y: Theme.dp(8)
+                        size: grid.side
+                        entry: thing.modelData
+                    }
+                    Txt {
+                        x: Theme.dp(8)
+                        y: grid.side + Theme.dp(16)
+                        width: thing.width - Theme.dp(16)
+                        text: thing.modelData.name
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                        maximumLineCount: 2
+                        size: Theme.small
+                        color: "#f4f5f7"
+                    }
+                }
+            }
+        }
+    }
 
     Component {
         id: picture

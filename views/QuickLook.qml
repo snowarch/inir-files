@@ -78,6 +78,7 @@ FocusScope {
                     if (i.media && i.media.duration > 0) parts.push(Fmt.duration(i.media.duration))
                     if (i.pdf && i.pdf.pages > 0) parts.push(I18n.n("%1 page", "%1 pages", i.pdf.pages))
                     if (!root.entry.dir) parts.push(Fmt.size(root.entry.size))
+                    else if (i.files + i.dirs > 0) parts.push(Fmt.items(i.files + i.dirs))
                     if (root.folder) parts.push((root.folder.current + 1) + " / " + root.folder.model.count)
                     return parts.filter(s => s).join(" · ")
                 }
