@@ -13,6 +13,64 @@ Item {
     readonly property var folder: root.browser.activePane ? root.browser.activePane.folder : null
     readonly property string place: root.folder ? root.folder.place : ""
 
+    // ---- bookmarks: an order the person just made shows at once, before the core writes it back. Each one can wear
+    // its own glyph and colour (settings "marks"); a section folds away (settings "fold").
+    property var pendingMarks: null
+    property int moving: 0
+    Connections { target: Core; function onPlacesChanged() { if (root.moving === 0) root.pendingMarks = null } }
+    readonly property var allMarks: root.places.bookmarks ?? []
+    readonly property var looks: Prefs.get("marks") ?? ({})
+    property int dragFrom: -1
+    property int dragTo: -1
+    property int insertAt: -1
+    property Item insertBy: null
+    readonly property var tints: ({ accent: Theme.accentInk, secondary: Theme.secondary, tertiary: Theme.tertiary, red: Theme.danger, amber: Theme.warning, green: Theme.success })
+    readonly property var glyphChoices: [
+        { glyph: "bookmark", text: I18n.tr("Bookmark") }, { glyph: "folder", text: I18n.tr("Folder") }, { glyph: "star", text: I18n.tr("Star") },
+        { glyph: "favorite", text: I18n.tr("Heart") }, { glyph: "work", text: I18n.tr("Work") }, { glyph: "school", text: I18n.tr("Study") },
+        { glyph: "code", text: I18n.tr("Code") }, { glyph: "palette", text: I18n.tr("Design") }, { glyph: "sports_esports", text: I18n.tr("Games") },
+        { glyph: "music_note", text: I18n.tr("Music") }, { glyph: "image", text: I18n.tr("Pictures") }, { glyph: "movie", text: I18n.tr("Videos") },
+        { glyph: "cloud", text: I18n.tr("Cloud") }, { glyph: "download", text: I18n.tr("Downloads") }
+    ]
+    readonly property var tintChoices: [
+        { key: "", text: I18n.tr("Default") }, { key: "accent", text: I18n.tr("Accent") }, { key: "secondary", text: I18n.tr("Secondary accent") },
+        { key: "tertiary", text: I18n.tr("Tertiary accent") }, { key: "red", text: I18n.tr("Red") }, { key: "amber", text: I18n.tr("Amber") },
+        { key: "green", text: I18n.tr("Green") }
+    ]
+    function folded(section: string): bool { return (Prefs.get("fold") ?? {})[section] === true }
+    function fold(section: string): void {
+        const f = Object.assign({}, Prefs.get("fold") ?? {})
+        f[section] = !f[section]
+        Prefs.set("fold", f)
+    }
+    function look(path: string, key: string, value: string): void {
+        const all = Object.assign({}, root.looks)
+        const one = Object.assign({}, all[path] ?? {})
+        one[key] = value
+        all[path] = one
+        Prefs.set("marks", all)
+    }
+    // A place among the bookmarks shown, as an index of the whole file, which also holds the remote ones.
+    function fileIndex(k: int): int {
+        if (k >= root.marks.length) return root.allMarks.length
+        return Math.max(0, root.allMarks.findIndex(b => b.path === root.marks[k].path))
+    }
+    function moveMark(path: string, to: int): void {
+        const from = root.marks.findIndex(m => m.path === path)
+        if (from < 0 || to < 0 || to >= root.marks.length || to === from) return
+        const at = root.fileIndex(to)
+        const next = (root.pendingMarks ?? root.allMarks.filter(b => !b.remote)).slice()
+        next.splice(to, 0, next.splice(from, 1)[0])
+        root.pendingMarks = next
+        root.moving++
+        Core.call("bookmark_move", { path: path, at: at }, r => { root.moving--; Core.takeBookmarks(r); if (!r.ok) root.pendingMarks = null })
+    }
+    // The menu stays open on Move up and Move down, so a bookmark can go several steps.
+    function moveFromMenu(it: var, index: int, step: int): void {
+        root.moveMark(it.path, index + step)
+        root.browser.menus.refresh(root.menuFor(it, index + step))
+    }
+
     readonly property var roleGlyphs: ({ desktop: "desktop_windows", documents: "description", downloads: "download", music: "music_note",
         pictures: "image", videos: "movie", templates: "draft", public: "public" })
     readonly property var roleNames: ({ desktop: I18n.tr("Desktop"), documents: I18n.tr("Documents"), downloads: I18n.tr("Downloads"),
@@ -28,7 +86,10 @@ Item {
         out.push({ path: "trash:", name: I18n.tr("Trash"), glyph: "delete", kind: "trash", count: root.places.trash ?? 0 })
         return out
     }
-    readonly property var marks: (root.places.bookmarks ?? []).filter(b => !b.remote).map(b => ({ path: b.path, name: b.name, glyph: b.exists ? "bookmark" : "bookmark_remove", kind: "bookmark", missing: !b.exists }))
+    readonly property var marks: (root.pendingMarks ?? root.allMarks.filter(b => !b.remote)).map(b => ({
+        path: b.path, name: b.name, glyph: b.exists ? (root.looks[b.path]?.glyph || "bookmark") : "bookmark_remove",
+        tint: root.looks[b.path]?.tint ?? "", kind: "bookmark", missing: !b.exists
+    }))
     readonly property var disks: (root.places.devices ?? []).map(d => ({
         path: d.root ? "/" : d.path,
         name: d.root ? I18n.tr("Computer") : (d.label || d.model || I18n.tr("%1 volume", Fmt.size(d.size))),
@@ -66,16 +127,40 @@ Item {
         })
     }
 
+    // A section's title; a click folds the section away and back.
     component Heading: Item {
         id: heading
         property string text
+        property string section: ""
+        readonly property bool folded: heading.section.length > 0 && root.folded(heading.section)
         width: parent ? parent.width : 0
         height: Theme.dp(34)
         Caption {
+            id: headCaption
             x: Theme.dp(20)
             anchors.bottom: parent.bottom
             anchors.bottomMargin: Theme.dp(6)
             text: heading.text
+            color: headMouse.containsMouse ? Theme.ink2 : Theme.ink3
+        }
+        Glyph {
+            visible: heading.section.length > 0 && (headMouse.containsMouse || heading.folded)
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.dp(18)
+            anchors.verticalCenter: headCaption.verticalCenter
+            name: "expand_more"
+            size: Theme.dp(18)
+            color: Theme.ink3
+            rotation: heading.folded ? -90 : 0
+            Behavior on rotation { NumberAnimation { duration: Theme.fast; easing.type: Easing.OutCubic } }
+        }
+        MouseArea {
+            id: headMouse
+            anchors.fill: parent
+            enabled: heading.section.length > 0
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.fold(heading.section)
         }
     }
 
@@ -86,17 +171,44 @@ Item {
         readonly property var it: place.modelData
         readonly property bool current: root.place === place.it.path && place.it.path.length > 0
         property bool dropping: false
+        readonly property bool mark: place.it.kind === "bookmark"
+        readonly property bool full: place.it.kind === "trash" && (place.it.count ?? 0) > 0
+        // A bookmark lifted by the pointer follows it; the others open a gap where it would land.
+        readonly property bool lifted: reorder.active
+        readonly property real shift: {
+            if (!place.mark || root.dragFrom < 0 || place.lifted) return 0
+            const i = place.index, f = root.dragFrom, t = root.dragTo
+            if (f < t && i > f && i <= t) return -place.height
+            if (f > t && i >= t && i < f) return place.height
+            return 0
+        }
         width: parent ? parent.width : 0
         height: Theme.dp(place.it.meter >= 0 ? 44 : 34)
+        z: place.lifted ? 2 : 0
+        transform: Translate {
+            y: place.lifted ? reorder.translation.y : place.shift
+            Behavior on y { enabled: !place.lifted; NumberAnimation { duration: Theme.fast; easing.type: Easing.OutCubic } }
+        }
+        HoverHandler { id: rowHover }
         Rectangle {
             anchors.fill: parent
             anchors.leftMargin: Theme.dp(10)
             anchors.rightMargin: Theme.dp(10)
             radius: Theme.dp(10)
-            color: place.dropping ? Theme.selectionHover : place.current ? Theme.accentPlate : placeMouse.pressed ? Theme.fillPress : placeMouse.containsMouse ? Theme.fill : "transparent"
-            border.width: place.dropping ? Math.max(1, Theme.dp(1.5)) : 0
-            border.color: Theme.accent
+            color: place.lifted ? Theme.raised : place.dropping ? Theme.selectionHover : place.current ? Theme.accentPlate : placeMouse.pressed ? Theme.fillPress : rowHover.hovered ? Theme.fill : "transparent"
+            border.width: place.dropping ? Math.max(1, Theme.dp(1.5)) : place.lifted && !Theme.light ? 1 : 0
+            border.color: place.dropping ? Theme.accent : Theme.line
             Behavior on color { ColorAnimation { duration: Theme.fast } }
+        }
+        // Where a dropped folder joins the bookmarks.
+        Rectangle {
+            visible: place.mark && (root.insertAt === place.index || root.insertAt === place.index + 1 && place.index === root.marks.length - 1)
+            x: Theme.dp(16)
+            width: parent.width - Theme.dp(32)
+            height: Theme.dp(2)
+            radius: height / 2
+            y: root.insertAt === place.index ? -height / 2 : parent.height - height / 2
+            color: Theme.accent
         }
         Glyph {
             id: placeGlyph
@@ -104,8 +216,8 @@ Item {
             y: Math.round(Theme.dp(17) - height / 2)
             name: place.it.glyph
             size: Theme.dp(19)
-            fill: place.current ? 1 : 0
-            color: place.current ? Theme.accentInk : Theme.inkNav
+            fill: place.current || place.full ? 1 : 0
+            color: place.current ? Theme.accentInk : place.it.tint ? (root.tints[place.it.tint] ?? Theme.inkNav) : Theme.inkNav
             opacity: place.it.missing || (place.it.kind === "device" && !place.it.mounted) ? 0.55 : 1
         }
         Txt {
@@ -135,16 +247,36 @@ Item {
             anchors.right: parent.right
             anchors.rightMargin: Theme.dp(16)
             y: Theme.dp(17) - height / 2
-            width: ejectAct.visible ? ejectAct.width : count.visible ? count.implicitWidth : 0
+            width: ejectAct.visible ? ejectAct.width : sweep.visible ? sweep.width : count.visible ? count.width : 0
             height: Theme.dp(24)
-            Txt {
+            // What the trash holds, as a count on a chip; pointed at, the chip gives way to the button that empties it.
+            Rectangle {
                 id: count
-                visible: (place.it.count ?? 0) > 0
+                visible: (place.it.count ?? 0) > 0 && !sweep.visible
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                text: Fmt.num(place.it.count ?? 0, 0)
-                size: Theme.small
-                color: place.current ? Theme.accentInk : Theme.ink3
+                width: Math.max(height, countText.implicitWidth + Theme.dp(12))
+                height: Theme.dp(20)
+                radius: height / 2
+                color: place.current ? Theme.alpha(Theme.accentInk, 0.16) : Theme.fillHover
+                Txt {
+                    id: countText
+                    anchors.centerIn: parent
+                    text: Fmt.num(place.it.count ?? 0, 0)
+                    size: Theme.caption
+                    strong: true
+                    color: place.current ? Theme.accentInk : Theme.ink2
+                }
+            }
+            Act {
+                id: sweep
+                visible: place.full && rowHover.hovered
+                anchors.verticalCenter: parent.verticalCenter
+                size: Theme.dp(24)
+                glyphSize: Theme.dp(16)
+                glyph: "delete_sweep"
+                tip: I18n.tr("Empty trash")
+                onClicked: root.browser.actions.emptyTrash()
             }
             Act {
                 id: ejectAct
@@ -160,7 +292,7 @@ Item {
         MouseArea {
             id: placeMouse
             anchors.fill: parent
-            anchors.rightMargin: ejectAct.visible ? Theme.dp(44) : 0
+            anchors.rightMargin: ejectAct.visible || sweep.visible ? Theme.dp(44) : 0
             hoverEnabled: true
             acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
             onClicked: mouse => {
@@ -170,15 +302,53 @@ Item {
                 } else root.open(place.it, mouse.button === Qt.MiddleButton)
             }
         }
+        DragHandler {
+            id: reorder
+            enabled: place.mark && root.marks.length > 1
+            target: null
+            xAxis.enabled: false
+            grabPermissions: PointerHandler.CanTakeOverFromItems
+            onActiveChanged: {
+                if (active) { root.dragFrom = place.index; root.dragTo = place.index; return }
+                const to = root.dragTo
+                root.dragFrom = -1
+                root.dragTo = -1
+                root.moveMark(place.it.path, to)
+            }
+            onTranslationChanged: if (active) root.dragTo = Math.max(0, Math.min(root.marks.length - 1, place.index + Math.round(translation.y / place.height)))
+        }
+        // A drop goes into the place; on a bookmark's top or bottom edge, a folder joins the bookmarks there.
         DropArea {
             anchors.fill: parent
-            enabled: place.it.kind !== "recent" && !place.it.missing && (place.it.kind !== "device" || place.it.mounted)
-            onEntered: drag => {
-                if (!drag.hasUrls || root.browser.actions.dropRefused(drag.urls, place.it.path)) { drag.accepted = false; return }
-                place.dropping = true
+            enabled: place.it.kind !== "recent" && (place.mark || !place.it.missing) && (place.it.kind !== "device" || place.it.mounted)
+            function slot(y: real): int {
+                if (!place.mark) return -1
+                if (y < place.height * 0.3) return place.index
+                if (y > place.height * 0.7) return place.index + 1
+                return -1
             }
-            onExited: place.dropping = false
-            onDropped: drop => { place.dropping = false; root.browser.actions.drop(drop, place.it.path) }
+            function aim(drag: var): void {
+                const s = slot(drag.y)
+                if (s >= 0 || root.insertBy === place) { root.insertAt = s; root.insertBy = s >= 0 ? place : null }
+                place.dropping = s < 0 && !place.it.missing && !root.browser.actions.dropRefused(drag.urls, place.it.path)
+            }
+            onEntered: drag => {
+                if (!drag.hasUrls) { drag.accepted = false; return }
+                aim(drag)
+            }
+            onPositionChanged: drag => aim(drag)
+            onExited: {
+                place.dropping = false
+                if (root.insertBy === place) { root.insertAt = -1; root.insertBy = null }
+            }
+            onDropped: drop => {
+                const s = slot(drop.y)
+                place.dropping = false
+                root.insertAt = -1
+                root.insertBy = null
+                if (s >= 0) root.browser.actions.bookmarkDropped(drop, root.fileIndex(s))
+                else if (!place.it.missing && !root.browser.actions.dropRefused(drop.urls, place.it.path)) root.browser.actions.drop(drop, place.it.path)
+            }
         }
         // The room on a disk shows in the window's tip, over the rows, never under the row below.
         Timer {
@@ -204,9 +374,18 @@ Item {
         if (it.kind === "bookmark") {
             out.push({ separator: true })
             out.push({ text: I18n.tr("Rename bookmark"), glyph: "edit", run: () => root.browser.actions.renameBookmark(it) })
-            out.push({ text: I18n.tr("Move up"), glyph: "arrow_upward", enabled: index > 0, run: () => { Core.call("bookmark_move", { path: it.path, at: index - 1 }, () => Core.refreshPlaces()) } })
-            out.push({ text: I18n.tr("Move down"), glyph: "arrow_downward", enabled: index < root.marks.length - 1, run: () => { Core.call("bookmark_move", { path: it.path, at: index + 1 }, () => Core.refreshPlaces()) } })
-            out.push({ text: I18n.tr("Remove bookmark"), glyph: "bookmark_remove", danger: true, run: () => { Core.call("bookmark_remove", { path: it.path }, () => Core.refreshPlaces()) } })
+            const own = root.looks[it.path] ?? {}
+            out.push({ text: I18n.tr("Icon"), glyph: own.glyph || "bookmark", sub: root.glyphChoices.map(c => ({
+                text: c.text, glyph: c.glyph, current: (own.glyph || "bookmark") === c.glyph, run: () => root.look(it.path, "glyph", c.glyph) })) })
+            out.push({ text: I18n.tr("Color"), glyph: "palette", sub: root.tintChoices.map(c => ({
+                text: c.text, glyph: "circle", fill: 1, tint: c.key ? root.tints[c.key] : Theme.inkNav, current: (own.tint ?? "") === c.key,
+                run: () => root.look(it.path, "tint", c.key) })) })
+            out.push({ text: I18n.tr("Move up"), glyph: "arrow_upward", keep: true, enabled: index > 0, run: () => root.moveFromMenu(it, index, -1) })
+            out.push({ text: I18n.tr("Move down"), glyph: "arrow_downward", keep: true, enabled: index < root.marks.length - 1, run: () => root.moveFromMenu(it, index, 1) })
+            out.push({ text: I18n.tr("Remove bookmark"), glyph: "bookmark_remove", danger: true, run: () => {
+                Core.call("bookmark_remove", { path: it.path }, r => Core.takeBookmarks(r))
+                if (root.looks[it.path]) { const all = Object.assign({}, root.looks); delete all[it.path]; Prefs.set("marks", all) }
+            } })
         }
         if (it.kind === "trash") out.push({ text: I18n.tr("Empty trash"), glyph: "delete_forever", danger: true, enabled: (it.count ?? 0) > 0, run: () => root.browser.actions.emptyTrash() })
         if ((it.kind === "device" && !it.root) || it.kind === "share") {
@@ -262,14 +441,17 @@ Item {
             width: flick.width
             Repeater { model: root.own; delegate: Place {} }
             Heading {
-                visible: true
                 text: I18n.tr("Bookmarks")
+                section: "bookmarks"
                 DropArea {
                     anchors.fill: parent
                     onEntered: drag => { if (!drag.hasUrls) drag.accepted = false }
-                    onDropped: drop => root.browser.actions.bookmarkDropped(drop)
+                    onDropped: drop => root.browser.actions.bookmarkDropped(drop, root.fileIndex(0))
                 }
             }
+            Column {
+                width: col.width
+                visible: !root.folded("bookmarks")
             Item {
                 visible: root.marks.length === 0
                 width: col.width
@@ -292,10 +474,19 @@ Item {
                 }
             }
             Repeater { model: root.marks; delegate: Place {} }
-            Heading { text: I18n.tr("Devices") }
-            Repeater { model: root.disks; delegate: Place {} }
-            Heading { visible: root.shares.length > 0; text: I18n.tr("Network") }
-            Repeater { model: root.shares; delegate: Place {} }
+            }
+            Heading { text: I18n.tr("Devices"); section: "devices" }
+            Column {
+                width: col.width
+                visible: !root.folded("devices")
+                Repeater { model: root.disks; delegate: Place {} }
+            }
+            Heading { visible: root.shares.length > 0; text: I18n.tr("Network"); section: "network" }
+            Column {
+                width: col.width
+                visible: !root.folded("network")
+                Repeater { model: root.shares; delegate: Place {} }
+            }
         }
     }
 

@@ -34,7 +34,9 @@ Singleton {
         rail: true,
         counts: true,
         restoreTabs: true,
-        typeAhead: true
+        typeAhead: true,
+        marks: ({}),            // a bookmark's own look: { path: { glyph, tint } }
+        fold: ({})              // rail sections folded away: { bookmarks, devices, network }
     })
     // Read as the app starts (the files block until loaded), so the first window opens with them.
     property var values: root.parse(settingsFile.text())

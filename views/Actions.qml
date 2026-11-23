@@ -271,15 +271,17 @@ Item {
 
     // ---- places
     function bookmark(path: string): void {
-        Core.call("bookmark_add", { path: path }, r => { if (!r.ok) return root.fail(r.error); Core.refreshPlaces(); Toast.show(I18n.tr("“%1” added to bookmarks", Fmt.name(path)), "", null) })
+        Core.call("bookmark_add", { path: path }, r => { if (!r.ok) return root.fail(r.error); Core.takeBookmarks(r); Toast.show(I18n.tr("“%1” added to bookmarks", Fmt.name(path)), "", null) })
     }
-    function bookmarkDropped(drop: var): void {
+    // Dropped folders join the bookmarks at `at` (an index of the whole bookmarks file), or at the end.
+    function bookmarkDropped(drop: var, at: int): void {
         const paths = root.pathsOf(drop.urls)
         if (paths.length === 0) return
         drop.accept(Qt.LinkAction)
         Core.call("stat", { paths: paths }, r => {
             if (!r.ok) return
-            for (const e of r.entries) if (e.dir) Core.call("bookmark_add", { path: e.path }, () => Core.refreshPlaces())
+            const dirs = r.entries.filter(e => e.dir)
+            dirs.forEach((e, i) => Core.call("bookmark_add", at >= 0 ? { path: e.path, at: at + i } : { path: e.path }, b => Core.takeBookmarks(b)))
         })
     }
     function renameBookmark(it: var): void {
@@ -287,7 +289,7 @@ Item {
             title: I18n.tr("Rename bookmark"),
             field: true,
             fieldText: it.name ?? it.label ?? Fmt.name(it.path),
-            choices: [{ text: I18n.tr("Rename"), kind: "solid", run: text => Core.call("bookmark_rename", { path: it.path, name: text }, () => Core.refreshPlaces()) }]
+            choices: [{ text: I18n.tr("Rename"), kind: "solid", run: text => Core.call("bookmark_rename", { path: it.path, name: text }, r => Core.takeBookmarks(r)) }]
         })
     }
     function propertiesOf(paths: var): void { if (paths.length > 0) root.sheet(propertiesSheet, { paths: paths }) }

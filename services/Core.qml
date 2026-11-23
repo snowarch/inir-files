@@ -89,6 +89,8 @@ Singleton {
         root.clipRev++
     }
 
+    // The bookmarks a bookmark op sends back, put in place with no new look at the disks.
+    function takeBookmarks(r: var): void { if (r?.ok && r.bookmarks) root.places = Object.assign({}, root.places, { bookmarks: r.bookmarks }) }
     function refreshPlaces(): void { root.call("places", {}, r => { if (r.ok) root.places = r }) }
 
     // ---- thumbnails: asked for by what is on screen, answered to the item that asked

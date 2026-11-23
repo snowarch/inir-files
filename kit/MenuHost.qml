@@ -3,8 +3,8 @@ import QtQuick.Effects
 import qs.services
 
 // Menus inside the window: a card at the pointer, a submenu beside its row, keys to walk them.
-// An entry: { text, glyph, icon, keys, run, danger, enabled, checked, sub: [entries] }, { separator: true } or
-// { header: "text" }.
+// An entry: { text, glyph, icon, keys, run, danger, enabled, checked, current, tint, fill, keep, sub: [entries] },
+// { separator: true } or { header: "text" }. An entry with keep runs and leaves the menu open (Move up, Move down).
 FocusScope {
     id: root
     anchors.fill: parent
@@ -18,7 +18,7 @@ FocusScope {
     property Item returnFocus: null
 
     function open(entries: var, x: real, y: real): void {
-        root.returnFocus = root.Window.window?.activeFocusItem ?? null
+        if (root.levels.length === 0) root.returnFocus = root.Window.window?.activeFocusItem ?? null
         root.levels = [{ entries: entries.filter(e => e), x: x, y: y }]
         root.currents = [-1]
         root.forceActiveFocus()
@@ -26,6 +26,12 @@ FocusScope {
     function openAt(entries: var, item: Item, below: bool): void {
         const p = item.mapToItem(root, 0, below ? item.height + Theme.dp(4) : 0)
         root.open(entries, p.x, p.y)
+    }
+    // New rows for the open menu, in place: the card stays where it is and the pointed row stays pointed.
+    function refresh(entries: var): void {
+        if (root.levels.length === 0) return
+        root.levels = [Object.assign({}, root.levels[0], { entries: entries.filter(e => e) })]
+        root.currents = root.currents.slice(0, 1)
     }
     function close(): void {
         root.levels = []
@@ -52,7 +58,7 @@ FocusScope {
         const e = root.levels[level]?.entries[index]
         if (!e || e.separator || e.header || e.enabled === false) return
         if (e.sub) return
-        root.close()
+        if (!e.keep) root.close()
         if (e.run) e.run()
     }
     function selectable(e: var): bool { return e && !e.separator && !e.header && e.enabled !== false }
@@ -102,19 +108,22 @@ FocusScope {
             required property int index
             readonly property var level: root.levels[card.index] ?? ({ entries: [], x: 0, y: 0 })
             property var entries: []
+            // The card appears once as it opens; rows made again in an open card do not flash it.
             onLevelChanged: if (card.level.entries !== card.entries) {
+                const was = card.entries.length > 0
                 card.entries = card.level.entries
-                if (card.entries.length > 0) appear.restart()
+                if (!was && card.entries.length > 0) appear.restart()
             }
             visible: card.entries.length > 0
             readonly property bool anyGlyph: card.entries.some(e => e.glyph || e.icon || e.checked !== undefined)
             readonly property real need: {
                 let w = 0
                 for (const e of card.entries) {
-                    const t = metrics.advanceWidth(e.text ?? e.header ?? "") + (e.keys ? metrics.advanceWidth(e.keys) + Theme.dp(28) : 0) + (e.sub ? Theme.dp(22) : 0)
+                    const t = metrics.advanceWidth(e.text ?? e.header ?? "") * (e.current ? 1.06 : 1) + (e.keys ? metrics.advanceWidth(e.keys) + Theme.dp(28) : 0) + (e.sub ? Theme.dp(22) : 0)
                     w = Math.max(w, t)
                 }
-                return w + Theme.dp(card.anyGlyph ? 52 : 28)
+                // The row's margins: the card's 6 on each side, the lead glyph (8 + 22 + 6) or 12, then 10 and 10 at the end.
+                return w + Theme.dp(card.anyGlyph ? 70 : 46)
             }
             width: Math.max(Theme.dp(190), Math.min(Theme.dp(380), card.need))
             height: col.implicitHeight + Theme.dp(12)
@@ -201,7 +210,9 @@ FocusScope {
                                 name: row.modelData.checked === true ? "check" : row.modelData.checked === false ? "" : (row.modelData.glyph ?? "")
                                 size: Theme.dp(18)
                                 weight: row.modelData.checked === true ? 600 : 400
-                                color: row.modelData.danger ? Theme.danger : row.modelData.checked === true ? Theme.accentInk : Theme.ink2
+                                fill: row.modelData.fill ?? (row.modelData.current ? 1 : 0)
+                                color: row.modelData.danger ? Theme.danger : row.modelData.tint ? row.modelData.tint
+                                     : row.modelData.checked === true || row.modelData.current ? Theme.accentInk : Theme.ink2
                             }
                             Image {
                                 anchors.centerIn: parent
@@ -220,7 +231,8 @@ FocusScope {
                             anchors.rightMargin: Theme.dp(10)
                             height: parent.height
                             text: row.modelData.text ?? ""
-                            color: row.modelData.danger ? Theme.danger : Theme.ink
+                            strong: row.modelData.current === true
+                            color: row.modelData.danger ? Theme.danger : row.modelData.current ? Theme.accentInk : Theme.ink
                             opacity: row.usable ? 1 : 0.4
                         }
                         Txt {
