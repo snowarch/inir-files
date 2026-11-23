@@ -49,7 +49,13 @@ Item {
     Component.onDestruction: if (root.asked) Core.unthumb(root.asked.path, root.asked.size, root.asked.mtime, root)
 
     readonly property bool showThumb: !root.dir && root.thumbFile.length > 0 && thumb.status !== Image.Error
+    // A launcher wears its app's icon, with either set of icons: a theme name or a file.
+    readonly property string appIcon: {
+        const a = root.entry?.appIcon ?? ""
+        return a.length === 0 ? "" : a.startsWith("/") ? Fmt.url(a) : Quickshell.iconPath(a, true) || ""
+    }
     readonly property string systemIcon: {
+        if (root.appIcon.length > 0) return root.appIcon
         if (Prefs.get("icons") !== "system" || !root.entry) return ""
         const roles = { home: "user-home", desktop: "user-desktop", documents: "folder-documents", downloads: "folder-download",
             music: "folder-music", pictures: "folder-pictures", videos: "folder-videos", templates: "folder-templates", public: "folder-publicshare" }
