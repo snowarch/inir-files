@@ -4,7 +4,7 @@
 use crate::util;
 use crate::Ctx;
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -109,6 +109,27 @@ fn flatten(dev: &Value, parent: Option<&Value>, out: &mut Vec<(Value, Option<Val
     }
 }
 
+/// The mount points that show a filesystem whole. A folder of it bound somewhere else (a bind mount, or a btrfs
+/// subvolume) lists the same device in lsblk, often first, and is not where the disk opens.
+fn whole_mounts() -> HashSet<String> {
+    let text = fs::read_to_string("/proc/self/mountinfo").unwrap_or_default();
+    text.lines()
+        .filter_map(|l| {
+            let mut f = l.split(' ');
+            let root = f.nth(3)?;
+            let at = f.next()?;
+            (root == "/").then(|| at.replace("\\040", " ").replace("\\011", "\t").replace("\\012", "\n").replace("\\134", "\\"))
+        })
+        .collect()
+}
+
+/// Where a disk opens: of its mount points outside the system's own, the one that shows it whole, the shortest first.
+fn pick_mount(mounts: &[String], whole: &HashSet<String>) -> Option<String> {
+    let mut found: Vec<&String> = mounts.iter().filter(|m| !SYSTEM_MOUNTS.contains(&m.as_str()) && !m.starts_with("/boot") && *m != "[SWAP]").collect();
+    found.sort_by_key(|m| (!whole.contains(*m), m.len()));
+    found.first().map(|m| (*m).clone())
+}
+
 const SYSTEM_MOUNTS: &[&str] = &["/boot", "/efi", "/boot/efi", "/recovery", "/var", "/tmp", "/srv", "/opt", "/usr", "/root", "/nix", "/snap", "/.snapshots", "/var/log", "/var/cache", "/var/tmp", "/home"];
 
 pub fn devices() -> Vec<Value> {
@@ -120,7 +141,8 @@ pub fn devices() -> Vec<Value> {
     }
     let root_dev = all.iter().find(|(d, _)| d["mountpoints"].as_array().map(|m| m.iter().any(|x| x == "/")).unwrap_or(false)).map(|(d, _)| d["path"].clone());
     let mut out = Vec::new();
-    let mut seen_uuid = std::collections::HashSet::new();
+    let mut seen_uuid = HashSet::new();
+    let whole = whole_mounts();
     for (d, disk) in all {
         let fstype = d["fstype"].as_str().unwrap_or("");
         if fstype.is_empty() || ["swap", "crypto_LUKS", "LVM2_member", "linux_raid_member", "zfs_member", "squashfs"].contains(&fstype) {
@@ -135,7 +157,7 @@ pub fn devices() -> Vec<Value> {
         }
         let mounts: Vec<String> = d["mountpoints"].as_array().into_iter().flatten().filter_map(|m| m.as_str()).map(str::to_string).collect();
         let is_root = mounts.iter().any(|m| m == "/");
-        let mount = if is_root { Some("/".to_string()) } else { mounts.iter().find(|m| !SYSTEM_MOUNTS.contains(&m.as_str()) && !m.starts_with("/boot") && *m != "[SWAP]").cloned() };
+        let mount = if is_root { Some("/".to_string()) } else { pick_mount(&mounts, &whole) };
         let disk = disk.unwrap_or_else(|| d.clone());
         let removable = disk["hotplug"].as_bool().unwrap_or(false) || disk["rm"].as_bool().unwrap_or(false) || disk["tran"].as_str() == Some("usb");
         // The system's own partitions (/boot, /efi, a second subvolume of the root) stay out of the way.
@@ -263,4 +285,22 @@ pub fn recent(ctx: &Ctx) -> Value {
         e["order"] = json!(i);
     }
     json!({"entries": entries})
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_disk_opens_where_it_is_whole() {
+        let mounts: Vec<String> = ["/home/a/Wallpapers", "/home/a/Downloads", "/mnt/games"].iter().map(|s| s.to_string()).collect();
+        let whole: HashSet<String> = ["/mnt/games".to_string(), "/".to_string()].into_iter().collect();
+        assert_eq!(pick_mount(&mounts, &whole).as_deref(), Some("/mnt/games"));
+    }
+
+    #[test]
+    fn with_no_whole_mount_the_shortest_wins() {
+        let mounts: Vec<String> = ["/srv", "/data/sub/deep", "/data/sub"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(pick_mount(&mounts, &HashSet::new()).as_deref(), Some("/data/sub"));
+    }
 }
