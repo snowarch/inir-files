@@ -302,6 +302,8 @@ FloatingWindow {
     Key { sequence: "Ctrl+Shift+N"; onActivated: root.actions.newFolder(root.pane) }
     Key { sequence: "Ctrl+N"; always: true; onActivated: root.newWindow(root.pane ? root.pane.folder.place : "") }
     Key { sequences: [StandardKey.Undo]; onActivated: root.actions.undo() }
+    Key { sequences: ["Ctrl+Shift+Z", "Ctrl+Y"]; onActivated: root.actions.redo() }
+    Key { sequence: "Ctrl+S"; onActivated: root.actions.selectByName(root.pane) }
     Key { sequence: "Ctrl+1"; always: true; onActivated: root.actions.setView("grid") }
     Key { sequence: "Ctrl+2"; always: true; onActivated: root.actions.setView("list") }
     Key { sequence: "Ctrl+3"; always: true; onActivated: root.actions.setView("columns") }
@@ -316,6 +318,17 @@ FloatingWindow {
     Key { sequence: "Ctrl+="; always: true; onActivated: root.actions.zoom(1) }
     Key { sequence: "Ctrl++"; always: true; onActivated: root.actions.zoom(1) }
     Key { sequence: "Ctrl+-"; always: true; onActivated: root.actions.zoom(-1) }
+    Key { sequence: "Ctrl+0"; always: true; onActivated: root.actions.resetZoom() }
+    // Alt with a digit picks that tab; Alt+9 the last one, as in a web browser.
+    Instantiator {
+        model: 9
+        delegate: Key {
+            required property int index
+            sequence: "Alt+" + (index + 1)
+            always: true
+            onActivated: { if (index === 8) root.tabIndex = root.tabs.length - 1; else if (index < root.tabs.length) root.tabIndex = index }
+        }
+    }
     Key { sequence: "Ctrl+,"; always: true; onActivated: root.actions.settings() }
     Key { sequence: "Ctrl+Q"; always: true; onActivated: root.closeWindow() }
 }

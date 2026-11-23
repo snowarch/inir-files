@@ -153,6 +153,7 @@ Item {
         onReleased: mouse => { if (!drag.active) root.pane.releaseItem(root.index, mouse) }
         onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton && !Prefs.get("singleClick")) root.pane.openItem(root.index, false) }
         onClicked: mouse => { if (mouse.button === Qt.MiddleButton) root.pane.openItem(root.index, true) }
+        Hold { onHeld: at => { if (at.x <= root.nameWidth && !root.renaming) root.pane.holdItem(root.index, at, hit) } }
     }
 
     // What the press moves past the threshold; the drag itself rides on the pane.

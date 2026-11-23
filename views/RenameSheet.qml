@@ -50,7 +50,7 @@ Sheet {
                 Toast.fail(r.error.startsWith("exists:") ? I18n.tr("“%1” is already there", r.error.slice(7)) : Errors.text(r.error))
                 return
             }
-            Undo.push({ job: true, op: "movepairs", args: { pairs: r.pairs.map(p => [p[1], p[0]]) }, label: I18n.tr("Undo rename") })
+            Undo.push({ job: true, what: "rename", op: "movepairs", args: { pairs: r.pairs.map(p => [p[1], p[0]]) } })
             Toast.show(I18n.n("%1 item renamed", "%1 items renamed", r.pairs.length), I18n.tr("Undo"), () => Undo.undo(pane ? pane.browser : null))
             if (pane) { pane.folder.reload(); pane.forceActiveFocus() }
         })

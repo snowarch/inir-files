@@ -212,13 +212,22 @@ Inset {
                             hoverEnabled: true
                             enabled: crumb.modelData.path.length > 0
                             acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+                            onPressed: crumbHold.fired = false
                             onClicked: mouse => {
+                                if (crumbHold.fired) return
                                 const p = crumb.modelData.path
                                 if (mouse.button === Qt.MiddleButton) root.browser.newTab(p)
                                 else if (mouse.button === Qt.RightButton) {
                                     const at = crumbMouse.mapToItem(root.browser.stage, mouse.x, mouse.y)
                                     root.browser.actions.placeMenu(p, at.x, at.y)
                                 } else if (p !== root.folder.place || root.folder.mode === "search") root.folder.go(p)
+                            }
+                            Hold {
+                                id: crumbHold
+                                onHeld: at => {
+                                    const p = crumbMouse.mapToItem(root.browser.stage, at.x, at.y)
+                                    root.browser.actions.placeMenu(crumb.modelData.path, p.x, p.y)
+                                }
                             }
                         }
                         DropArea {

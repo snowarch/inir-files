@@ -294,11 +294,20 @@ Item {
             anchors.rightMargin: ejectAct.visible || sweep.visible ? Theme.dp(44) : 0
             hoverEnabled: true
             acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+            onPressed: placeHold.fired = false
             onClicked: mouse => {
+                if (placeHold.fired) return
                 if (mouse.button === Qt.RightButton) {
                     const p = placeMouse.mapToItem(root.browser.stage, mouse.x, mouse.y)
                     root.browser.menus.open(root.menuFor(place.it, place.index), p.x, p.y)
                 } else root.open(place.it, mouse.button === Qt.MiddleButton)
+            }
+            Hold {
+                id: placeHold
+                onHeld: at => {
+                    const p = placeMouse.mapToItem(root.browser.stage, at.x, at.y)
+                    root.browser.menus.open(root.menuFor(place.it, place.index), p.x, p.y)
+                }
             }
         }
         DragHandler {

@@ -1,5 +1,6 @@
 import QtQuick
 import qs.services
+import qs.kit
 
 // The band the pointer draws over empty space to choose what it touches; near an edge the view scrolls on.
 MouseArea {
@@ -30,6 +31,7 @@ MouseArea {
 
     onPressed: mouse => {
         root.pane.forceActiveFocus()
+        root.pane.held = false
         const ctrl = mouse.modifiers & (Qt.ControlModifier | Qt.ShiftModifier)
         if (mouse.button === Qt.RightButton) {
             if (!ctrl) root.pane.folder.clearSel()
@@ -52,6 +54,7 @@ MouseArea {
         root.update()
     }
     onReleased: mouse => {
+        if (root.pane.held) { root.pane.held = false; root.drawing = false; root.edgeSpeed = 0; return }
         if (!root.drawing && mouse.button === Qt.LeftButton) {
             const i = root.rowAt(root.start.x, root.start.y)
             if (i >= 0) {
@@ -64,6 +67,18 @@ MouseArea {
         root.edgeSpeed = 0
     }
     onCanceled: { root.drawing = false; root.edgeSpeed = 0 }
+    // A finger held on empty space: the place's menu, or the row's where a row runs under it.
+    Hold {
+        onHeld: at => {
+            if (root.drawing || root.pane.browser.busy) return
+            const c = root.content(at.x, at.y)
+            const i = root.rowAt(c.x, c.y)
+            if (i >= 0) { root.pane.holdItem(i, at, root); return }
+            root.pane.held = true
+            const p = root.mapToItem(root.pane.browser.stage, at.x, at.y)
+            root.pane.browser.actions.backgroundMenu(root.pane, p.x, p.y)
+        }
+    }
     onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton && root.pane.folder.mode === "folder" && !root.drawing) root.pane.folder.goUp() }
 
     Timer {

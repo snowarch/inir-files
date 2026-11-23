@@ -16,6 +16,8 @@ FocusScope {
     readonly property bool sideways: loader.item?.sideways ?? false
     property bool dropHover: false
     property int narrowOnRelease: -1
+    // A finger hold opened a menu: the lift that ends it does nothing more.
+    property bool held: false
     property string typed: ""
     property var memo: ({})
     property string shownPlace: ""
@@ -50,6 +52,7 @@ FocusScope {
     // ---- pointer
     function pressItem(i: int, mouse: var, from: Item): void {
         root.activate()
+        root.held = false
         const f = folder
         const path = f.all[i]?.path ?? ""
         const ctrl = (mouse.modifiers & Qt.ControlModifier) !== 0
@@ -72,7 +75,18 @@ FocusScope {
             f.selRev++
         } else f.only(i)
     }
+    // A finger held on a thing: its menu. The lift that ends the hold neither narrows the choice nor opens the thing.
+    function holdItem(i: int, at: point, from: Item): void {
+        const f = folder
+        if (root.browser.busy || i < 0 || i >= f.all.length) return
+        if (!f.isSel(f.all[i].path)) f.only(i)
+        root.narrowOnRelease = -1
+        root.held = true
+        const p = from.mapToItem(root.browser.stage, at.x, at.y)
+        root.browser.actions.itemMenu(root, p.x, p.y)
+    }
     function releaseItem(i: int, mouse: var): void {
+        if (root.held) { root.held = false; return }
         const plain = mouse.button === Qt.LeftButton && (mouse.modifiers & (Qt.ControlModifier | Qt.ShiftModifier)) === 0
         if (plain && root.narrowOnRelease === i && folder.selCount > 1) folder.only(i)
         root.narrowOnRelease = -1
@@ -151,7 +165,7 @@ FocusScope {
             event.accepted = true
             return
         }
-        if (k === Qt.Key_Menu) {
+        if (k === Qt.Key_Menu || (k === Qt.Key_F10 && shift)) {
             const p = root.menuPoint()
             if (f.selCount > 0) root.browser.actions.itemMenu(root, p.x, p.y)
             else root.browser.actions.backgroundMenu(root, p.x, p.y)
@@ -209,7 +223,7 @@ FocusScope {
         if (icon) icon.grabToImage(r => carrier.Drag.imageSource = r.url)
     }
     // The drag starts once the move that asked for it has returned, so no delegate is on the stack while it runs.
-    function carry(): void { Qt.callLater(() => { if (!carrier.Drag.active) carrier.Drag.active = true }) }
+    function carry(): void { Qt.callLater(() => { if (!carrier.Drag.active && !root.held) carrier.Drag.active = true }) }
 
     Loader {
         id: loader

@@ -37,7 +37,7 @@ Item {
         pane.folder.focusPath = path
         if (rename) root.browser.renaming = path
         pane.folder.reload()
-        Undo.push({ job: true, op: "trash", args: { paths: [path] }, label: I18n.tr("Undo new item") })
+        Undo.push({ job: true, what: "new", op: "trash", args: { paths: [path] } })
     }
 
     // ---- the clipboard
@@ -240,7 +240,7 @@ Item {
         Core.call("rename", { path: path, name: name }, r => {
             if (!r.ok) return root.fail(r.error)
             if (pane) { pane.folder.focusPath = r.to; pane.folder.reload(); pane.forceActiveFocus() }
-            Undo.push({ op: "rename", args: { path: r.to, name: Fmt.name(r.from) }, label: I18n.tr("Undo rename") })
+            Undo.push(Undo.renamed(r))
         })
     }
     function renameCancelled(pane: var): void {
@@ -298,7 +298,7 @@ Item {
     function purge(pane: var): void { const p = pane.folder.chosenPaths(); if (p.length > 0) root.askDelete(p, "purge") }
     function restore(pane: var): void {
         const paths = pane.folder.chosenPaths()
-        if (paths.length > 0) Core.job("restore", { paths: paths }, { owner: root.browser, undoable: false, say: I18n.n("%1 item put back", "%1 items put back", paths.length) })
+        if (paths.length > 0) Core.job("restore", { paths: paths }, { owner: root.browser, say: I18n.n("%1 item put back", "%1 items put back", paths.length) })
     }
     function emptyTrash(): void {
         root.sheet(confirmSheet, {
@@ -335,6 +335,8 @@ Item {
     function properties(pane: var): void { root.propertiesOf(root.chosenOrHere(pane)) }
     function settings(): void { root.sheet(settingsSheet, {}) }
     function undo(): void { if (Undo.can) Undo.undo(root.browser) }
+    function redo(): void { if (Undo.canRedo) Undo.redo(root.browser) }
+    function selectByName(pane: var): void { if (pane) root.sheet(selectSheet, { pane: pane }) }
 
     // ---- how the files show
     function setView(value: string): void { Prefs.set("view", value) }
@@ -345,6 +347,10 @@ Item {
     function zoom(step: int): void {
         if (Prefs.get("view") === "grid") Prefs.set("zoom", Math.max(1, Math.min(7, Number(Prefs.get("zoom")) + step)))
         else Prefs.set("listZoom", Math.max(0, Math.min(2, Number(Prefs.get("listZoom")) + step)))
+    }
+    function resetZoom(): void {
+        const key = Prefs.get("view") === "grid" ? "zoom" : "listZoom"
+        Prefs.set(key, Prefs.defaults[key])
     }
 
     // ---- menus
@@ -390,8 +396,10 @@ Item {
             { text: I18n.tr("Show hidden files"), glyph: "visibility", keys: "Ctrl+H", checked: Prefs.get("hidden") === true, run: () => Prefs.set("hidden", !Prefs.get("hidden")) },
             { text: I18n.tr("Select all"), glyph: "select_all", keys: "Ctrl+A", run: () => pane.folder.selectAll() },
             { text: I18n.tr("Invert selection"), glyph: "flip", keys: "Ctrl+Shift+I", run: () => pane.folder.invertSel() },
+            { text: I18n.tr("Select by name…"), glyph: "checklist", keys: "Ctrl+S", run: () => root.selectByName(pane) },
             { separator: true },
             { text: Undo.can ? Undo.label : I18n.tr("Undo"), glyph: "undo", keys: "Ctrl+Z", enabled: Undo.can, run: () => root.undo() },
+            { text: Undo.canRedo ? Undo.redoLabel : I18n.tr("Redo"), glyph: "redo", keys: "Ctrl+Shift+Z", enabled: Undo.canRedo, run: () => root.redo() },
             { text: I18n.tr("Settings"), glyph: "settings", keys: "Ctrl+,", run: () => root.settings() }
         ])
     }
@@ -541,5 +549,6 @@ Item {
     Component { id: appsSheet; AppsSheet {} }
     Component { id: compressSheet; CompressSheet { ops: root } }
     Component { id: passwordSheet; PasswordSheet { ops: root } }
+    Component { id: selectSheet; SelectSheet {} }
     Component { id: settingsSheet; SettingsSheet {} }
 }

@@ -73,6 +73,7 @@ Item {
         property bool joinDown: false
         property bool dropping: false
         signal pressed(var mouse, Item from)
+        signal held(point at, Item from)
         width: root.colWidth
         height: root.rowHeight
         Rectangle {
@@ -123,6 +124,7 @@ Item {
             hoverEnabled: true
             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
             onPressed: mouse => row.pressed(mouse, rowMouse)
+            Hold { onHeld: at => row.held(at, rowMouse) }
         }
         DropArea {
             anchors.fill: parent
@@ -161,6 +163,12 @@ Item {
                         const p = from.mapToItem(root.pane.browser.stage, mouse.x, mouse.y)
                         Qt.callLater(() => root.pane.browser.actions.itemMenu(root.pane, p.x, p.y))
                     }
+                }
+                onHeld: (at, from) => {
+                    if (root.pane.browser.busy) return
+                    root.pane.held = true
+                    const p = from.mapToItem(root.pane.browser.stage, at.x, at.y)
+                    root.pane.browser.actions.itemMenu(root.pane, p.x, p.y)
                 }
             }
             QQC.ScrollBar.vertical: Scroller {}
@@ -255,6 +263,7 @@ Item {
                             onPressed: mouse => hereRow.pressed(mouse, hereMouse)
                             onReleased: mouse => { if (!drag.active) root.pane.releaseItem(hereRow.index, mouse) }
                             onDoubleClicked: mouse => { if (!Prefs.get("singleClick")) root.pane.openItem(hereRow.index, false) }
+                            Hold { onHeld: at => root.pane.holdItem(hereRow.index, at, hereMouse) }
                         }
                         Item { id: dragProxy }
                     }
