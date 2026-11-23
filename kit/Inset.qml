@@ -25,7 +25,7 @@ Rectangle {
         anchors.fill: parent
         radius: root.radius
         color: "transparent"
-        border.width: 1.5
+        border.width: Math.max(1, Theme.dp(2))
         border.color: Theme.alpha(Theme.accent, 0.7)
         opacity: root.focused ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Theme.fast } }

@@ -263,6 +263,8 @@ Sheet {
                 color: Theme.ink
                 font.family: Theme.mono
                 font.pixelSize: Theme.small
+                renderType: TextEdit.NativeRendering
+                font.hintingPreference: Font.PreferDefaultHinting
             }
             Act { anchors.right: parent.right; anchors.rightMargin: Theme.dp(4); anchors.verticalCenter: parent.verticalCenter; size: Theme.dp(30); glyphSize: Theme.dp(16); glyph: "content_copy"; tip: I18n.tr("Copy"); onClicked: root.browser.actions.copyText(sumText.text) }
         }

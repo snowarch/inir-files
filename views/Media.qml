@@ -274,7 +274,7 @@ Item {
         Text {
             id: page
             property string html: ""
-            readonly property real base: root.large ? Theme.row * 1.08 : Theme.body
+            readonly property real base: root.large ? Math.round(Theme.row * 1.08) : Theme.body
             readonly property string look: [Theme.ink, Theme.ink2, Theme.ink3, Theme.line, Theme.fill, Theme.accent, Theme.mono, page.base, Math.round(page.width / 32), root.key].join("|")
             onLookChanged: ask.restart()
             Timer {
@@ -296,6 +296,8 @@ Item {
             linkColor: Theme.accent
             font.family: Theme.sans
             font.pixelSize: page.base
+            renderType: Text.NativeRendering
+            font.hintingPreference: Font.PreferDefaultHinting
             onLinkActivated: link => Qt.openUrlExternally(link)
             HoverHandler { cursorShape: page.hoveredLink.length > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor }
         }
@@ -318,6 +320,8 @@ Item {
             color: Theme.ink
             font.family: Theme.mono
             font.pixelSize: Theme.small
+            renderType: TextEdit.NativeRendering
+            font.hintingPreference: Font.PreferDefaultHinting
         }
     }
 

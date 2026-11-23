@@ -248,6 +248,8 @@ Inset {
         selectedTextColor: Theme.ink
         font.family: Theme.sans
         font.pixelSize: Theme.row
+        renderType: TextInput.NativeRendering
+        font.hintingPreference: Font.PreferDefaultHinting
         selectByMouse: true
         clip: true
         onAccepted: root.go(field.text)

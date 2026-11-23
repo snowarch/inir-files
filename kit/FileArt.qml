@@ -40,23 +40,27 @@ Item {
     Item {
         visible: !root.tiny && root.folder
         anchors.fill: parent
+        // Every edge on a whole pixel, so the sheets stay sharp at any size.
         readonly property real s: root.size
-        readonly property real r: Math.max(2, s * 0.085)
+        readonly property real r: Math.max(2, Math.round(s * 0.085))
+        readonly property real side: Math.round(s * 0.03)
+        readonly property real wide: s - 2 * side
+        readonly property real foot: Math.round(s * 0.86)
         Rectangle { // the tab
-            x: parent.s * 0.03; y: parent.s * 0.1
-            width: parent.s * 0.4; height: parent.s * 0.2
+            x: parent.side; y: Math.round(parent.s * 0.1)
+            width: Math.round(parent.s * 0.4); height: Math.round(parent.s * 0.2)
             radius: parent.r
             color: Theme.folderBack
         }
         Rectangle { // the back sheet
-            x: parent.s * 0.03; y: parent.s * 0.16
-            width: parent.s * 0.94; height: parent.s * 0.7
+            x: parent.side; y: Math.round(parent.s * 0.16)
+            width: parent.wide; height: parent.foot - y
             radius: parent.r
             color: Theme.folderBack
         }
         Rectangle { // the paper between
-            x: parent.s * 0.11; y: parent.s * 0.22
-            width: parent.s * 0.78; height: parent.s * 0.4
+            x: Math.round(parent.s * 0.11); y: Math.round(parent.s * 0.22)
+            width: parent.s - 2 * x; height: Math.round(parent.s * 0.4)
             radius: parent.r * 0.6
             color: Theme.paper
             rotation: -2.5
@@ -64,8 +68,8 @@ Item {
         }
         Rectangle { // the front sheet
             id: front
-            x: parent.s * 0.03; y: parent.s * 0.31
-            width: parent.s * 0.94; height: parent.s * 0.55
+            x: parent.side; y: Math.round(parent.s * 0.31)
+            width: parent.wide; height: parent.foot - y
             radius: parent.r
             color: Theme.folderFront
             Rectangle { // light along its top
@@ -91,12 +95,12 @@ Item {
         visible: !root.tiny && !root.folder
         anchors.fill: parent
         readonly property real s: root.size
-        readonly property real w: s * 0.72
-        readonly property real h: s * 0.9
-        readonly property real x0: (s - w) / 2 + s * 0.02
-        readonly property real y0: (s - h) / 2
-        readonly property real f: w * 0.3
-        readonly property real r: Math.max(2, s * 0.07)
+        readonly property real w: Math.round(s * 0.72)
+        readonly property real h: Math.round(s * 0.9)
+        readonly property real x0: Math.round((s - w) / 2 + s * 0.02)
+        readonly property real y0: Math.round((s - h) / 2)
+        readonly property real f: Math.round(w * 0.3)
+        readonly property real r: Math.max(2, Math.round(s * 0.07))
         Shape {
             anchors.fill: parent
             preferredRendererType: Shape.CurveRenderer

@@ -15,6 +15,8 @@ TextEdit {
     selectedTextColor: Theme.ink
     font.family: Theme.mono
     font.pixelSize: Theme.small
+    renderType: TextEdit.NativeRendering
+    font.hintingPreference: Font.PreferDefaultHinting
     SyntaxHighlighter {
         textEdit: root
         definition: Repository.definitionForFileName(root.fileName)

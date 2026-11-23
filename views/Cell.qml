@@ -33,7 +33,7 @@ Item {
 
     Rectangle {
         id: plate
-        anchors.horizontalCenter: parent.horizontalCenter
+        x: Math.round((parent.width - width) / 2)
         y: Theme.dp(4)
         width: root.iconSize + Theme.dp(18)
         height: width
@@ -44,9 +44,11 @@ Item {
         Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.OutCubic } }
     }
 
+    // On whole pixels: a picture or a drawn sheet half a pixel off is resampled soft.
     FileIcon {
         id: icon
-        anchors.centerIn: plate
+        x: plate.x + Math.round((plate.width - width) / 2)
+        y: plate.y + Math.round((plate.height - height) / 2)
         size: root.iconSize
         entry: root.model
         dim: root.cut

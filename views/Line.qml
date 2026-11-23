@@ -73,7 +73,7 @@ Item {
             FileIcon {
                 id: icon
                 x: Theme.dp(10)
-                anchors.verticalCenter: parent.verticalCenter
+                y: Math.round((parent.height - height) / 2)
                 size: root.iconSize
                 entry: root.model
                 dim: root.cut

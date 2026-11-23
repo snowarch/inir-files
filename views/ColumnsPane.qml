@@ -88,7 +88,7 @@ Item {
         FileIcon {
             id: rowIcon
             x: Theme.dp(12)
-            anchors.verticalCenter: parent.verticalCenter
+            y: Math.round((parent.height - height) / 2)
             size: root.iconSize
             entry: row.entry
             allowThumb: true

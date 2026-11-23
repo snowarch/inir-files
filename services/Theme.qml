@@ -176,14 +176,16 @@ Singleton {
     readonly property string title: root.typography.titleFont || root.sans
     readonly property string mono: root.typography.monospaceFont || "monospace"
     readonly property string glyphs: "Material Symbols Rounded"
-    function type(value: real): real { return Math.round(value * root.density * root.fine * root.sizeScale * 1.06 * 10) / 10 }
-    readonly property real caption: root.type(10.5)
-    readonly property real small: root.type(11.5)
-    readonly property real body: root.type(12.5)
-    readonly property real row: root.type(13.5)
+    // Whole pixels: a size between two is cut down to the lower one and drawn soft. 13 px reads at 1x on a desktop
+    // screen; nothing goes under 11. The shell's own size scale and the density sit on top.
+    function type(value: real): real { return Math.max(10, Math.round(value * root.density * root.sizeScale)) }
+    readonly property real caption: root.type(11)
+    readonly property real small: root.type(12)
+    readonly property real body: root.type(13)
+    readonly property real row: root.type(14)
     readonly property real head: root.type(16)
-    readonly property real titleSize: root.type(24)
-    readonly property real display: root.type(32)
+    readonly property real titleSize: root.type(22)
+    readonly property real display: root.type(30)
 
     // ---- motion
     readonly property bool motion: Prefs.motion
