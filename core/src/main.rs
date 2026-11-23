@@ -105,7 +105,16 @@ fn handle(ctx: &Arc<Ctx>, req: Value) {
     let path = PathBuf::from(req["path"].as_str().unwrap_or(""));
     let res: Result<Value, String> = match op.as_str() {
         "ping" => Ok(json!({})),
-        "list" => list::list(ctx, &req),
+        "list" => match list::list(ctx, &req) {
+            Ok((v, counts)) => {
+                reply(ctx, &id, Ok(v));
+                if let Some(c) = counts {
+                    c.spawn(ctx);
+                }
+                return;
+            }
+            Err(e) => Err(e),
+        },
         "stat" => Ok(json!({"entries": list::stat_many(ctx, &paths(&req["paths"]))})),
         "info" => info::info(ctx, &path),
         "text" => Ok(info::text_head(&path, req["limit"].as_u64().unwrap_or(262144) as usize)),

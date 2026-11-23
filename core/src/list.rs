@@ -82,7 +82,37 @@ pub fn entry(ctx: &Ctx, path: &Path, roles: &HashMap<PathBuf, &'static str>, dot
             v["role"] = json!(role);
         }
     }
+    // A launcher wears its app's icon.
+    if mime == "application/x-desktop" {
+        if let Some(icon) = app_icon(path) {
+            v["appIcon"] = json!(icon);
+        }
+    }
     Some(v)
+}
+
+/// The Icon= of a desktop entry's main group: a theme name or a path.
+fn app_icon(path: &Path) -> Option<String> {
+    use std::io::Read;
+    let mut head = String::new();
+    fs::File::open(path).ok()?.take(16 * 1024).read_to_string(&mut head).ok()?;
+    desktop_icon(&head)
+}
+
+fn desktop_icon(text: &str) -> Option<String> {
+    let mut main = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            if main {
+                break;
+            }
+            main = line == "[Desktop Entry]";
+        } else if let Some(icon) = line.strip_prefix("Icon=").filter(|_| main) {
+            return Some(icon.trim().to_string()).filter(|i| !i.is_empty());
+        }
+    }
+    None
 }
 
 pub fn dot_hidden(dir: &Path) -> HashSet<String> {
@@ -90,7 +120,9 @@ pub fn dot_hidden(dir: &Path) -> HashSet<String> {
 }
 
 pub fn sort(entries: &mut [Value], key: &str, desc: bool, dirs_first: bool) {
-    let name = |v: &Value| v["name"].as_str().unwrap_or("").to_string();
+    fn name(v: &Value) -> &str {
+        v["name"].as_str().unwrap_or("")
+    }
     entries.sort_by(|a, b| {
         if dirs_first {
             let (da, db) = (a["dir"].as_bool().unwrap_or(false), b["dir"].as_bool().unwrap_or(false));
@@ -111,31 +143,50 @@ pub fn sort(entries: &mut [Value], key: &str, desc: bool, dirs_first: bool) {
             }
             _ => std::cmp::Ordering::Equal,
         };
-        let ord = ord.then_with(|| util::natural_cmp(&name(a), &name(b)));
+        let ord = ord.then_with(|| util::natural_cmp(name(a), name(b)));
         if desc { ord.reverse() } else { ord }
     });
 }
 
-pub fn list(ctx: &Arc<Ctx>, req: &Value) -> Result<Value, String> {
+/// The folder sizes a listing asks for: counted after its reply has gone out, so the first count never arrives before
+/// the rows it belongs to.
+pub struct Counts {
+    folder: String,
+    dirs: Vec<PathBuf>,
+    hidden: bool,
+}
+
+impl Counts {
+    pub fn spawn(self, ctx: &Arc<Ctx>) {
+        let ctx = ctx.clone();
+        std::thread::spawn(move || counts(&ctx, &self.folder, self.dirs, self.hidden));
+    }
+}
+
+// A folder this large is read on every core: each entry costs a stat, and a name without a type costs a read.
+const SPLIT_AT: usize = 512;
+
+pub fn list(ctx: &Arc<Ctx>, req: &Value) -> Result<(Value, Option<Counts>), String> {
     let raw = req["path"].as_str().unwrap_or("");
     let path = PathBuf::from(if raw.is_empty() { util::home().to_string_lossy().into_owned() } else { raw.to_string() });
     let show_hidden = req["hidden"].as_bool().unwrap_or(false);
     let rd = fs::read_dir(&path).map_err(|e| error_code(&e))?;
     let roles = crate::places::roles();
     let dh = dot_hidden(&path);
-    let mut entries = Vec::new();
-    let mut hidden = 0;
-    for de in rd.flatten() {
-        let p = de.path();
-        let Some(v) = entry(ctx, &p, &roles, &dh) else { continue };
-        if v["hidden"].as_bool().unwrap_or(false) {
-            hidden += 1;
-            if !show_hidden {
-                continue;
-            }
-        }
-        entries.push(v);
-    }
+    let names: Vec<PathBuf> = rd.flatten().map(|de| de.path()).collect();
+    let read = |part: &[PathBuf]| part.iter().filter_map(|p| entry(ctx, p, &roles, &dh)).collect::<Vec<_>>();
+    let all: Vec<Value> = if names.len() < SPLIT_AT {
+        read(&names)
+    } else {
+        let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(2, 8);
+        let chunk = names.len().div_ceil(threads);
+        std::thread::scope(|s| {
+            let parts: Vec<_> = names.chunks(chunk).map(|part| s.spawn(|| read(part))).collect();
+            parts.into_iter().flat_map(|h| h.join().unwrap_or_default()).collect()
+        })
+    };
+    let hidden = all.iter().filter(|v| v["hidden"].as_bool().unwrap_or(false)).count();
+    let mut entries: Vec<Value> = if show_hidden { all } else { all.into_iter().filter(|v| !v["hidden"].as_bool().unwrap_or(false)).collect() };
     sort(&mut entries, req["sort"].as_str().unwrap_or("name"), req["desc"].as_bool().unwrap_or(false), req["dirsFirst"].as_bool().unwrap_or(true));
     let (total, free) = util::fs_space(&path).unwrap_or((0, 0));
     let remote = util::is_remote(&path);
@@ -146,22 +197,22 @@ pub fn list(ctx: &Arc<Ctx>, req: &Value) -> Result<Value, String> {
         }
     }
     // Each folder's item count follows, read off the reply's thread: a folder of folders shows at once.
+    let mut follow = None;
     if !remote && req["counts"].as_bool().unwrap_or(true) {
         let dirs: Vec<PathBuf> = entries.iter().filter(|e| e["dir"].as_bool().unwrap_or(false)).map(|e| PathBuf::from(e["path"].as_str().unwrap_or(""))).collect();
         if !dirs.is_empty() {
-            let ctx = ctx.clone();
-            let folder = path.to_string_lossy().into_owned();
-            std::thread::spawn(move || counts(&ctx, &folder, dirs, show_hidden));
+            follow = Some(Counts { folder: path.to_string_lossy().into_owned(), dirs, hidden: show_hidden });
         }
     }
-    Ok(json!({
+    let reply = json!({
         "path": path.to_string_lossy(),
         "entries": entries,
         "hidden": hidden,
         "writable": util::can_write(&path),
         "space": {"total": total, "free": free},
         "remote": remote,
-    }))
+    });
+    Ok((reply, follow))
 }
 
 fn counts(ctx: &Ctx, folder: &str, dirs: Vec<PathBuf>, show_hidden: bool) {
@@ -185,4 +236,17 @@ pub fn stat_many(ctx: &Ctx, paths: &[PathBuf]) -> Vec<Value> {
     let roles = crate::places::roles();
     let empty = HashSet::new();
     paths.iter().filter_map(|p| entry(ctx, p, &roles, &empty)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_launcher_names_its_main_icon() {
+        let text = "[Desktop Action new]\nIcon=other\n[Desktop Entry]\nName=Editor\nIcon= org.app.Editor \n[Desktop Action x]\nIcon=late\n";
+        assert_eq!(desktop_icon(text).as_deref(), Some("org.app.Editor"));
+        assert_eq!(desktop_icon("[Desktop Entry]\nIcon=\n"), None);
+        assert_eq!(desktop_icon("[Desktop Entry]\nName=x\n[Other]\nIcon=y\n"), None);
+    }
 }
