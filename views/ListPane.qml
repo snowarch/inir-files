@@ -24,7 +24,7 @@ Item {
     readonly property var titles: ({ name: I18n.tr("Name"), size: I18n.tr("Size"), mtime: I18n.tr("Modified"), kind: I18n.tr("Kind"),
         origin: I18n.tr("Original location"), deleted: I18n.tr("Deleted"), where: I18n.tr("Location"), snippet: I18n.tr("Match") })
     readonly property var sortable: ({ name: "name", size: "size", mtime: "mtime", kind: "kind" })
-    readonly property var defaults: ({ size: 96, mtime: 150, kind: 190, origin: 240, deleted: 150, where: 260, snippet: 320 })
+    readonly property var defaults: ({ size: 132, mtime: 176, kind: 190, origin: 240, deleted: 150, where: 260, snippet: 320 })
     property var widths: Prefs.recall("columns", ({}))
     function widthOf(key: string): real { return root.widths[key] ?? Theme.dp(root.defaults[key] ?? 140) }
     readonly property var columns: {

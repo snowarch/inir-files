@@ -27,12 +27,15 @@ Singleton {
     function sameDay(a: date, b: date): bool {
         return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
     }
+    // The time of day. Locales put a narrow no-break space before "a. m." that many fonts draw as nothing: a plain
+    // no-break space keeps the gap and the line whole.
+    function clock(d: var): string { return d.toLocaleTimeString(root.loc, Locale.ShortFormat).replace(/\u202f/g, "\u00a0") }
     // Today shows the time, yesterday says so, this year the day and month, before that the year too.
     function when(ms: real): string {
         if (!ms || ms <= 0) return ""
         const d = new Date(ms)
         const now = new Date()
-        const time = d.toLocaleTimeString(root.loc, Locale.ShortFormat)
+        const time = root.clock(d)
         if (root.sameDay(d, now)) return I18n.tr("Today, %1", time)
         const y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
         if (root.sameDay(d, y)) return I18n.tr("Yesterday, %1", time)
@@ -42,7 +45,7 @@ Singleton {
     function full(ms: real): string {
         if (!ms || ms <= 0) return ""
         const d = new Date(ms)
-        return d.toLocaleDateString(root.loc, root.longDate) + ", " + d.toLocaleTimeString(root.loc, Locale.ShortFormat)
+        return d.toLocaleDateString(root.loc, root.longDate) + ", " + root.clock(d)
     }
     function duration(seconds: real): string {
         if (!(seconds >= 0)) return ""
