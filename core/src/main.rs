@@ -182,6 +182,7 @@ fn handle(ctx: &Arc<Ctx>, req: Value) {
         "set_default" => apps::set_default(&req),
         "terminal" => apps::terminal(&req),
         "run" => apps::run(&req),
+        "wallpaper" => apps::wallpaper(&req),
         "clip_set" => apps::clip_set(&req),
         "clip_get" => apps::clip_get(),
         "clip_save" => apps::clip_save(&req),

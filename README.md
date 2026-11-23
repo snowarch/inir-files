@@ -16,6 +16,7 @@ The file manager of the iNiR desktop. The interface is QML on qs-rs, the iNiR ru
 - Places, bookmarks, recent files, the trash and every disk, with mount, unmount and eject.
 - Search by name, or inside files with ripgrep.
 - Open with any app, set the default app of a kind, a terminal here, paste an image or text as a file.
+- Set a picture or a film as the iNiR wallpaper.
 - Colours, accent and fonts follow iNiR, in light and dark.
 
 ## Run it
@@ -23,6 +24,14 @@ The file manager of the iNiR desktop. The interface is QML on qs-rs, the iNiR ru
 ```sh
 cargo build --release --manifest-path core/Cargo.toml
 bin/inir-files [PATH]...
+```
+
+To keep it on your desktop, with an entry in the app launcher:
+
+```sh
+ln -s "$PWD/bin/inir-files" ~/.local/bin/inir-files
+install -Dm644 data/inir-files.desktop ~/.local/share/applications/inir-files.desktop
+xdg-mime default inir-files.desktop inode/directory   # optional: folders open in it
 ```
 
 `bin/inir-files` finds the runtime at `~/.local/share/inir/runtime/current/bin/qs` or as `qs` on the `PATH`

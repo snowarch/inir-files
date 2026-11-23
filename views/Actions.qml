@@ -167,6 +167,9 @@ Item {
     function openWithMenu(list: var, item: Item): void {
         root.withApps(list, apps => root.menus.openAt(root.openWithEntries(list, apps), item, true))
     }
+    function setWallpaper(path: string): void {
+        Core.call("wallpaper", { path: path }, r => { if (!r.ok) root.fail(r.error) })
+    }
     function terminal(dir: string): void {
         Core.call("terminal", { dir: dir, terminal: root.terminalCommand() }, r => { if (!r.ok) root.fail(r.error) })
     }
@@ -408,6 +411,7 @@ Item {
                 if (one) out.push({ text: I18n.tr("Open in new window"), glyph: "open_in_browser", run: () => root.browser.newWindow(one.path) })
             }
             if (dirs.length === 0 || one) out.push({ text: I18n.tr("Open with"), glyph: "apps", sub: root.openWithEntries(list, apps) })
+            if (one && (one.kind === "image" || one.kind === "video")) out.push({ text: I18n.tr("Set as wallpaper"), glyph: "wallpaper", run: () => root.setWallpaper(one.path) })
             if (f.mode === "search" || f.mode === "recent") out.push({ text: I18n.tr("Show in folder"), glyph: "folder_open", enabled: !!one, run: () => { f.go(Fmt.parent(one.path)); f.focusPath = one.path } })
             out.push({ separator: true })
             out.push({ text: I18n.tr("Cut"), glyph: "content_cut", keys: "Ctrl+X", enabled: writable, run: () => root.cut(pane) })

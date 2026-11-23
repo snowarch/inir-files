@@ -381,6 +381,18 @@ pub fn terminal(req: &Value) -> Result<Value, String> {
     Ok(json!({}))
 }
 
+// The desktop's wallpaper: the running iNiR shell sets it over its IPC, called with the runtime this app runs on.
+pub fn wallpaper(req: &Value) -> Result<Value, String> {
+    let path = req["path"].as_str().unwrap_or("");
+    let shell = fs::canonicalize(util::config_home().join("quickshell/inir")).map_err(|_| "noinir")?;
+    let qs = util::env_path("INIR_FILES_QS")
+        .or_else(|| Some(util::data_home().join("inir/runtime/current/bin/qs")).filter(|p| p.is_file()))
+        .or_else(|| util::which("qs"))
+        .ok_or("noinir")?;
+    let (ok, _) = util::run_status(&qs.to_string_lossy(), &["-p", &shell.to_string_lossy(), "ipc", "call", "wallpaperSelector", "set", path]);
+    if ok { Ok(json!({})) } else { Err("noinir".into()) }
+}
+
 pub fn run(req: &Value) -> Result<Value, String> {
     let path = PathBuf::from(req["path"].as_str().unwrap_or(""));
     if req["terminal"].as_bool().unwrap_or(false) {

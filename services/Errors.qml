@@ -18,6 +18,7 @@ Singleton {
         case "password": return I18n.tr("The archive needs a password")
         case "noapp": return I18n.tr("No application opens this kind of file")
         case "noterminal": return I18n.tr("No terminal was found")
+        case "noinir": return I18n.tr("iNiR is not running")
         case "busy": return I18n.tr("The disk is in use")
         case "intoitself": return I18n.tr("A folder cannot go inside itself")
         case "core": return I18n.tr("The file service stopped; try again")

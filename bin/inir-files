@@ -12,6 +12,7 @@ if [ -z "$qs" ]; then
     done
 fi
 [ -n "$qs" ] || { echo "inir-files: no qs runtime found; install iNiR or set INIR_FILES_QS" >&2; exit 1; }
+export INIR_FILES_QS=$qs   # the core calls the iNiR shell with the same runtime
 if [ -z "${INIR_FILES_CORE:-}" ] && [ ! -x "$here/core/target/release/inir-files-core" ]; then
     echo "inir-files: build the core first: cargo build --release --manifest-path $here/core/Cargo.toml" >&2
     exit 1
