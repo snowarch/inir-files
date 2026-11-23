@@ -225,10 +225,9 @@ Item {
                         strong: root.pane.active
                         joinUp: { void root.folder.selRev; const e = root.folder.all[hereRow.index - 1]; return hereRow.on && !!e && root.folder.isSel(e.path) }
                         joinDown: { void root.folder.selRev; const e = root.folder.all[hereRow.index + 1]; return hereRow.on && !!e && root.folder.isSel(e.path) }
-                        property string uris: ""
                         onPressed: (mouse, from) => {
                             root.pane.pressItem(hereRow.index, mouse, from)
-                            if (mouse.button === Qt.LeftButton) hereRow.uris = root.folder.chosenPaths().map(p => Fmt.url(p)).join("\r\n")
+                            if (mouse.button === Qt.LeftButton) root.pane.ready(null, root.iconSize)
                         }
                         Loader {
                             active: root.pane.browser.renaming === hereRow.model.path
@@ -248,22 +247,12 @@ Item {
                             acceptedButtons: Qt.LeftButton
                             drag.target: dragProxy
                             drag.threshold: Theme.dp(8)
+                            drag.onActiveChanged: { if (drag.active) root.pane.carry(); else { dragProxy.x = 0; dragProxy.y = 0 } }
                             onPressed: mouse => hereRow.pressed(mouse, hereMouse)
                             onReleased: mouse => { if (!drag.active) root.pane.releaseItem(hereRow.index, mouse) }
                             onDoubleClicked: mouse => { if (!Prefs.get("singleClick")) root.pane.openItem(hereRow.index, false) }
                         }
-                        Item {
-                            id: dragProxy
-                            width: root.iconSize
-                            height: root.iconSize
-                            Drag.dragType: Drag.Automatic
-                            Drag.active: hereMouse.drag.active
-                            Drag.supportedActions: Qt.CopyAction | Qt.MoveAction | Qt.LinkAction
-                            Drag.proposedAction: Qt.MoveAction
-                            Drag.mimeData: ({ "text/uri-list": hereRow.uris })
-                            Drag.onDragStarted: root.pane.dragging = true
-                            Drag.onDragFinished: { root.pane.dragging = false; dragProxy.x = 0; dragProxy.y = 0 }
-                        }
+                        Item { id: dragProxy }
                     }
                     QQC.ScrollBar.vertical: Scroller {}
                 }

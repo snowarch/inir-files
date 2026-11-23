@@ -35,7 +35,6 @@ Item {
     readonly property bool joinUp: { void root.folder.selRev; const e = root.folder.all[root.index - 1]; return root.chosen && !!e && root.folder.isSel(e.path) }
     readonly property bool joinDown: { void root.folder.selRev; const e = root.folder.all[root.index + 1]; return root.chosen && !!e && root.folder.isSel(e.path) }
     property bool dropping: false
-    property string uris: ""
 
     function value(key: string): string {
         switch (key) {
@@ -144,38 +143,20 @@ Item {
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
         drag.target: root.renaming ? null : proxy
         drag.threshold: Theme.dp(8)
+        drag.onActiveChanged: { if (drag.active) root.pane.carry(); else { proxy.x = 0; proxy.y = 0 } }
         onPressed: mouse => {
             // Only the name column takes a press: elsewhere the band starts, as over empty space.
             if (mouse.x > root.nameWidth || root.renaming) { mouse.accepted = false; return }
             root.pane.pressItem(root.index, mouse, hit)
-            if (mouse.button === Qt.LeftButton) {
-                root.uris = root.folder.chosenPaths().map(p => Fmt.url(p)).join("\r\n")
-                icon.grabToImage(r => proxy.Drag.imageSource = r.url)
-            }
+            if (mouse.button === Qt.LeftButton) root.pane.ready(icon, root.iconSize)
         }
         onReleased: mouse => { if (!drag.active) root.pane.releaseItem(root.index, mouse) }
         onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton && !Prefs.get("singleClick")) root.pane.openItem(root.index, false) }
         onClicked: mouse => { if (mouse.button === Qt.MiddleButton) root.pane.openItem(root.index, true) }
     }
 
-    Item {
-        id: proxy
-        width: root.iconSize
-        height: root.iconSize
-        Drag.dragType: Drag.Automatic
-        Drag.active: hit.drag.active
-        Drag.supportedActions: Qt.CopyAction | Qt.MoveAction | Qt.LinkAction
-        Drag.proposedAction: Qt.MoveAction
-        Drag.hotSpot.x: root.iconSize / 2
-        Drag.hotSpot.y: root.iconSize / 2
-        Drag.mimeData: ({ "text/uri-list": root.uris })
-        Drag.onDragStarted: root.pane.dragging = true
-        Drag.onDragFinished: dropAction => {
-            root.pane.dragging = false
-            proxy.x = 0
-            proxy.y = 0
-        }
-    }
+    // What the press moves past the threshold; the drag itself rides on the pane.
+    Item { id: proxy }
 
     DropArea {
         width: root.nameWidth

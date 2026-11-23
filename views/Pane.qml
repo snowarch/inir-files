@@ -12,7 +12,6 @@ FocusScope {
     readonly property bool active: root.browser.activePane === root
     property string viewMode: Prefs.get("view")
     readonly property Item view: loader.item ? loader.item.view : null
-    property bool dragging: false
     property bool dropHover: false
     property int narrowOnRelease: -1
     property string typed: ""
@@ -183,6 +182,29 @@ FocusScope {
             root.browser.actions.drop(drop, folder.mode === "trash" ? "trash:" : folder.path)
         }
     }
+
+    // A drag out of the pane rides here, not on the cell or row it starts from: a folder that opens under the pointer
+    // drops those, and the drag has to outlive them.
+    Item {
+        id: carrier
+        property string uris: ""
+        Drag.dragType: Drag.Automatic
+        Drag.supportedActions: Qt.CopyAction | Qt.MoveAction | Qt.LinkAction
+        Drag.proposedAction: Qt.MoveAction
+        Drag.mimeData: ({ "text/uri-list": carrier.uris })
+        // Qt leaves an automatic drag active once it ends: the next one starts only from false.
+        Drag.onDragFinished: carrier.Drag.active = false
+    }
+    // A press readies the drag: the chosen things, and the picture of what was pressed under the pointer.
+    function ready(icon: Item, side: real): void {
+        carrier.uris = folder.chosenPaths().map(p => Fmt.url(p)).join("\r\n")
+        carrier.Drag.hotSpot.x = side / 2
+        carrier.Drag.hotSpot.y = side / 2
+        carrier.Drag.imageSource = ""
+        if (icon) icon.grabToImage(r => carrier.Drag.imageSource = r.url)
+    }
+    // The drag starts once the move that asked for it has returned, so no delegate is on the stack while it runs.
+    function carry(): void { Qt.callLater(() => { if (!carrier.Drag.active) carrier.Drag.active = true }) }
 
     Loader {
         id: loader
