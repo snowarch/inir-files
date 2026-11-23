@@ -86,8 +86,9 @@ Item {
                 clip: true
                 asynchronous: true
                 smooth: true
-                mipmap: true
-                sourceSize.width: width * (root.Window.window?.devicePixelRatio ?? 1) * 1.5
+                // Both sides set: the picture is decoded to cover the print, one pixel to one.
+                sourceSize.width: width * (root.Window.window?.devicePixelRatio ?? 1)
+                sourceSize.height: height * (root.Window.window?.devicePixelRatio ?? 1)
                 opacity: status === Image.Ready ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: Theme.fast } }
             }

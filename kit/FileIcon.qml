@@ -67,7 +67,7 @@ Item {
         fillMode: Image.PreserveAspectFit
         asynchronous: true
         smooth: true
-        mipmap: true
+        // Decoded at the size it draws: no mipmaps to keep in memory.
         sourceSize.width: root.px
         sourceSize.height: root.px
         opacity: status === Image.Ready ? 1 : 0
