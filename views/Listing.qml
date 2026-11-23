@@ -10,26 +10,31 @@ Item {
     property bool loading: false
     property string error: ""
     property int serial: 0
+    // The rows as the model holds them, read in place of the model.
+    property var rows: []
 
     ListModel { id: entries }
 
     function load(): void {
-        if (root.path.length === 0) { entries.clear(); return }
+        if (root.path.length === 0) { root.rows = []; entries.clear(); return }
         const s = ++root.serial
         root.loading = true
         Core.call("list", { path: root.path, hidden: Prefs.get("hidden"), sort: Prefs.get("sort"), desc: Prefs.get("desc"), dirsFirst: Prefs.get("dirsFirst"), counts: false }, r => {
             if (s !== root.serial) return
             root.loading = false
             root.error = r.ok ? "" : r.error
-            const list = r.ok ? (r.entries ?? []) : []
+            // The keys only some entries carry, so every row has every role.
+            const b = { link: false, target: "", broken: false, role: "", appIcon: "", remote: false }
+            const list = (r.ok ? (r.entries ?? []) : []).map(e => Object.assign({}, b, e))
+            const old = root.rows
+            root.rows = list
             // Same rows in the same order: only what changed is touched.
-            if (list.length === entries.count && list.every((e, i) => entries.get(i).path === e.path)) {
-                for (let i = 0; i < list.length; i++) for (const k of ["name", "size", "mtime", "thumb", "icon"]) if (entries.get(i)[k] !== list[i][k]) entries.setProperty(i, k, list[i][k])
+            if (list.length === old.length && list.every((e, i) => old[i].path === e.path)) {
+                for (let i = 0; i < list.length; i++) for (const k in list[i]) if (old[i][k] !== list[i][k]) entries.setProperty(i, k, list[i][k])
                 return
             }
             entries.clear()
-            entries.append(list.map(e => ({ name: e.name, path: e.path, dir: e.dir, link: e.link ?? false, broken: e.broken ?? false, size: e.size, mtime: e.mtime,
-                mime: e.mime, kind: e.kind, icon: e.icon, generic: e.generic, hidden: e.hidden, mode: e.mode, thumb: e.thumb, role: e.role ?? "", items: -1 })))
+            entries.append(list)
         })
     }
     onPathChanged: root.load()

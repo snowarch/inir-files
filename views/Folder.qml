@@ -67,11 +67,11 @@ Item {
 
     readonly property var blank: ({ name: "", path: "", dir: false, link: false, size: 0, mtime: 0, mime: "", kind: "file", icon: "",
         generic: "", hidden: false, exec: false, mode: 0, uid: 0, items: -1, thumb: false, target: "", broken: false, role: "",
-        origin: "", deleted: 0, snippet: "", line: 0, comment: "" })
-    function normal(e: var): var {
-        const o = {}
-        for (const k in root.blank) o[k] = e[k] !== undefined && e[k] !== null ? e[k] : root.blank[k]
-        return o
+        origin: "", deleted: 0, snippet: "", line: 0, comment: "", appIcon: "", remote: false })
+    // Every row carries every role the views read. The core sends no nulls, so a plain copy over the blank does.
+    function rows(list: var): var {
+        const b = root.blank
+        return (list ?? []).map(e => Object.assign({}, b, e))
     }
     function reindex(): void {
         const m = {}
@@ -157,7 +157,7 @@ Item {
         root.writable = r.writable ?? (root.mode === "trash")
         root.space = r.space ?? ({ total: 0, free: 0 })
         root.remote = r.remote ?? false
-        let list = (r.entries ?? []).map(root.normal)
+        let list = root.rows(r.entries)
         if (root.mode !== "folder" && !root.showHidden) list = list.filter(e => !e.hidden || root.mode === "trash")
         if (keep) root.merge(list)
         else {
@@ -185,24 +185,28 @@ Item {
         root.selRev++
     }
 
-    // The new list against the rows on screen: both are in the same order, so one pass finds what came and went.
+    // The new list against the old one, which the rows on screen mirror: both are in the same order, so one pass finds
+    // what came, went and changed, and no row is read back from the model.
     function merge(list: var): void {
+        const old = root.all
         const fresh = {}
         for (const e of list) fresh[e.path] = true
-        let i = 0, j = 0
+        let i = 0, o = 0, j = 0
         while (j < list.length) {
-            if (i >= entries.count) {
+            if (o >= old.length) {
                 entries.append(list.slice(j))
                 break
             }
-            const have = entries.get(i).path
+            const have = old[o]
             const want = list[j]
-            if (have === want.path) {
-                const row = entries.get(i)
-                for (const k in want) if (row[k] !== want[k]) entries.setProperty(i, k, want[k])
-                i++; j++
-            } else if (!fresh[have]) {
+            if (have.path === want.path) {
+                // A folder keeps its count until the new one arrives, so a change on disk does not blank it.
+                if (want.dir && want.items < 0 && have.items >= 0) want.items = have.items
+                for (const k in want) if (have[k] !== want[k]) entries.setProperty(i, k, want[k])
+                i++; o++; j++
+            } else if (!fresh[have.path]) {
                 entries.remove(i)
+                o++
             } else if (root.at[want.path] === undefined) {
                 entries.insert(i, want)
                 i++; j++
@@ -237,7 +241,7 @@ Item {
         }
         function onSearchBatch(b) {
             if (b.token !== root.token) return
-            const list = (b.entries ?? []).map(root.normal)
+            const list = root.rows(b.entries)
             if (list.length > 0) {
                 root.found = root.found.concat(list)
                 const counts = Object.assign({}, root.kindCounts)
