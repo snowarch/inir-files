@@ -139,6 +139,12 @@ pub fn list(ctx: &Arc<Ctx>, req: &Value) -> Result<Value, String> {
     sort(&mut entries, req["sort"].as_str().unwrap_or("name"), req["desc"].as_bool().unwrap_or(false), req["dirsFirst"].as_bool().unwrap_or(true));
     let (total, free) = util::fs_space(&path).unwrap_or((0, 0));
     let remote = util::is_remote(&path);
+    // Each entry of a network folder says so: previews set to "This computer" pass it by.
+    if remote {
+        for e in entries.iter_mut() {
+            e["remote"] = json!(true);
+        }
+    }
     // Each folder's item count follows, read off the reply's thread: a folder of folders shows at once.
     if !remote && req["counts"].as_bool().unwrap_or(true) {
         let dirs: Vec<PathBuf> = entries.iter().filter(|e| e["dir"].as_bool().unwrap_or(false)).map(|e| PathBuf::from(e["path"].as_str().unwrap_or(""))).collect();

@@ -27,6 +27,7 @@ Singleton {
         icons: "drawn",         // drawn, system
         thumbnails: "local",    // all, local, never
         thumbLimit: 200,        // MB: larger files get no thumbnail
+        covers: true,           // a folder shows a picture it holds
         singleClick: false,
         confirmTrash: false,
         terminal: "",           // empty: the first terminal found

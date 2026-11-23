@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import qs.services
 import qs.kit
 
@@ -20,6 +21,8 @@ Item {
     readonly property bool renaming: root.pane.browser.renaming === root.path
     readonly property bool cut: { void root.pane.browser.actions.clipRev; return root.pane.browser.actions.isCut(root.path) }
     readonly property bool hovered: hit.containsMouse && root.inside(hit.mouseX, hit.mouseY)
+    // The one chosen entry's long name opens past its cell, on an opaque plate over the row below.
+    readonly property bool spills: !root.renaming && label.lineCount > 2
     property bool dropping: false
     property string uris: ""
 
@@ -50,6 +53,7 @@ Item {
         x: plate.x + Math.round((plate.width - width) / 2)
         y: plate.y + Math.round((plate.height - height) / 2)
         size: root.iconSize
+        grow: Theme.dp(12)
         entry: root.model
         dim: root.cut
         scale: root.dropping ? 1.06 : 1
@@ -64,7 +68,19 @@ Item {
         width: label.contentWidth + Theme.dp(12)
         height: label.contentHeight + Theme.dp(4)
         radius: Math.min(Theme.dp(8), height / 2)
-        color: root.chosen ? (root.lit ? (root.hovered ? Theme.selectionHover : Theme.selection) : Theme.fillPress) : "transparent"
+        readonly property color tint: root.chosen ? (root.lit ? (root.hovered ? Theme.selectionHover : Theme.selection) : Theme.fillPress) : "transparent"
+        color: root.spills ? Qt.tint(Theme.canvas, pill.tint) : pill.tint
+        border.width: root.spills && !Theme.light ? 1 : 0
+        border.color: Theme.line
+        RectangularShadow {
+            visible: root.spills
+            z: -1
+            anchors.fill: parent
+            radius: parent.radius
+            blur: Theme.dp(12)
+            offset.y: Theme.dp(3)
+            color: Theme.shadow
+        }
     }
     Txt {
         id: label
@@ -76,7 +92,7 @@ Item {
         size: Theme.body
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-        maximumLineCount: root.chosen && root.folder.selCount === 1 ? 5 : 2
+        maximumLineCount: root.chosen && root.folder.selCount === 1 ? 4 : 2
         elide: Text.ElideRight
         color: Theme.ink
         opacity: root.cut ? 0.6 : 1

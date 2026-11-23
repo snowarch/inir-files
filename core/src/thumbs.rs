@@ -322,6 +322,9 @@ fn external(argv: Vec<String>, tmp: &Path, out: &Path, src: &Path, mtime: i64, s
 /// to be drawn as it is. None when nothing could be made.
 pub fn make(ctx: &Ctx, path: &Path, size: &str) -> Option<String> {
     let meta = fs::metadata(path).ok()?;
+    if meta.is_dir() {
+        return cover_candidates(path).iter().find_map(|p| make(ctx, p, size));
+    }
     if !meta.is_file() {
         return None;
     }
@@ -406,6 +409,24 @@ pub fn make(ctx: &Ctx, path: &Path, size: &str) -> Option<String> {
     None
 }
 
+/// The pictures a folder could show, best first: one it names as its cover, then its first three pictures by name. Only
+/// its first 400 entries are read, so a huge folder costs no more than a small one.
+fn cover_candidates(dir: &Path) -> Vec<PathBuf> {
+    const NAMED: &[&str] = &[".folder.png", ".folder.jpg", "folder.jpg", "folder.png", "cover.jpg", "cover.png", "cover.webp"];
+    const PICTURES: &[&str] = &["jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "avif", "heic", "jxl"];
+    let mut out: Vec<PathBuf> = NAMED.iter().map(|n| dir.join(n)).filter(|p| p.is_file()).take(1).collect();
+    let Ok(rd) = fs::read_dir(dir) else { return out };
+    let mut found: Vec<PathBuf> = rd.take(400).flatten().filter(|e| {
+        let name = e.file_name().to_string_lossy().to_lowercase();
+        !name.starts_with('.') && e.file_type().map(|t| t.is_file()).unwrap_or(false)
+            && name.rsplit_once('.').is_some_and(|(_, ext)| PICTURES.contains(&ext))
+    }).map(|e| e.path()).collect();
+    found.sort();
+    let named = out.first().cloned();
+    out.extend(found.into_iter().filter(|p| Some(p) != named.as_ref()).take(3));
+    out
+}
+
 /// A page of a PDF, or a picture the interface cannot read itself (AVIF, HEIC, JPEG XL, RAW, PSD ...), drawn as a PNG
 /// about side pixels on its long edge for a large view. Cached by file, version, page and size; sizes go in steps of
 /// 256 so a window resized a little reuses what is drawn.
@@ -452,6 +473,20 @@ fn rand_suffix() -> usize {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_folder_shows_its_named_cover_then_its_first_pictures() {
+        use std::fs;
+        let dir = std::env::temp_dir().join(format!("inir-files-cover-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("sub.jpg")).unwrap();
+        for n in ["b.png", "a.JPG", ".hidden.png", "notes.txt", "c.webp", "d.png", "cover.jpg"] {
+            fs::write(dir.join(n), b"x").unwrap();
+        }
+        let names: Vec<String> = super::cover_candidates(&dir).iter().map(|p| crate::util::name_of(p)).collect();
+        assert_eq!(names, ["cover.jpg", "a.JPG", "b.png", "c.webp"]);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn exec_words() {
         assert_eq!(super::split_exec("a -s %s \"%i\" 'x y'"), ["a", "-s", "%s", "%i", "x y"]);

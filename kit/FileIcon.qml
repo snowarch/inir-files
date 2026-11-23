@@ -11,15 +11,22 @@ Item {
     property bool dim: false
     // The play mark on a film's thumbnail; off where a play button of its own sits over it.
     property bool badge: true
+    // How much larger than size a thumbnail may draw: the grid lets a picture fill its whole plate.
+    property real grow: 0
 
     readonly property string path: root.entry?.path ?? ""
     readonly property real mtime: root.entry?.mtime ?? 0
     readonly property real dpr: root.Window.window?.devicePixelRatio ?? 1
-    readonly property real px: root.size * root.dpr
+    readonly property real px: (root.size + root.grow) * root.dpr
     readonly property string thumbSize: root.px <= 128 ? "normal" : root.px <= 256 ? "large" : root.px <= 512 ? "x-large" : "xx-large"
-    readonly property bool wantsThumb: root.allowThumb && !!root.entry && root.entry.thumb === true && root.size >= 28
-        && Prefs.get("thumbnails") !== "never"
-        && !(["image", "pdf"].includes(root.entry.kind) && root.entry.size > Number(Prefs.get("thumbLimit")) * 1000000)
+    readonly property bool dir: root.entry?.dir === true
+    // A drawn folder holds a picture from inside it: its cover, else its first picture.
+    readonly property bool cover: root.dir && root.size >= 48 && Prefs.get("covers") !== false && Prefs.get("icons") !== "system"
+        && root.entry.role !== "trash"
+    readonly property bool wantsThumb: root.allowThumb && !!root.entry && root.size >= 28
+        && Prefs.get("thumbnails") !== "never" && !(Prefs.get("thumbnails") === "local" && root.entry.remote === true)
+        && (root.cover || root.entry.thumb === true
+            && !(["image", "pdf"].includes(root.entry.kind) && root.entry.size > Number(Prefs.get("thumbLimit")) * 1000000))
     property string thumbFile: ""
     property var asked: null
 
@@ -41,7 +48,7 @@ Item {
     Component.onCompleted: root.ask()
     Component.onDestruction: if (root.asked) Core.unthumb(root.asked.path, root.asked.size, root.asked.mtime, root)
 
-    readonly property bool showThumb: root.thumbFile.length > 0 && thumb.status !== Image.Error
+    readonly property bool showThumb: !root.dir && root.thumbFile.length > 0 && thumb.status !== Image.Error
     readonly property string systemIcon: {
         if (Prefs.get("icons") !== "system" || !root.entry) return ""
         const roles = { home: "user-home", desktop: "user-desktop", documents: "folder-documents", downloads: "folder-download",
@@ -52,9 +59,11 @@ Item {
 
     Image {
         id: thumb
-        anchors.fill: parent
+        anchors.centerIn: parent
+        width: root.size + root.grow
+        height: width
         visible: root.showThumb
-        source: root.thumbFile.length > 0 ? Fmt.url(root.thumbFile) + "?" + root.mtime : ""
+        source: root.thumbFile.length > 0 && !root.dir ? Fmt.url(root.thumbFile) + "?" + root.mtime : ""
         fillMode: Image.PreserveAspectFit
         asynchronous: true
         smooth: true
@@ -109,5 +118,6 @@ Item {
         }
         link: root.entry?.link ?? false
         broken: root.entry?.broken ?? false
+        cover: root.cover ? root.thumbFile : ""
     }
 }

@@ -14,6 +14,8 @@ Item {
     property bool link: false
     property bool broken: false
     property bool locked: false
+    // A picture the folder holds: drawn as a print standing out of it.
+    property string cover: ""
     property real size: 64
     implicitWidth: root.size
     implicitHeight: root.size
@@ -46,6 +48,7 @@ Item {
         readonly property real side: Math.round(s * 0.03)
         readonly property real wide: s - 2 * side
         readonly property real foot: Math.round(s * 0.86)
+        readonly property bool held: root.cover.length > 0 && photo.status !== Image.Error
         Rectangle { // the tab
             x: parent.side; y: Math.round(parent.s * 0.1)
             width: Math.round(parent.s * 0.4); height: Math.round(parent.s * 0.2)
@@ -58,17 +61,40 @@ Item {
             radius: parent.r
             color: Theme.folderBack
         }
-        Rectangle { // the paper between
-            x: Math.round(parent.s * 0.11); y: Math.round(parent.s * 0.22)
-            width: parent.s - 2 * x; height: Math.round(parent.s * 0.4)
+        Rectangle { // the paper between; behind a picture, a second print
+            x: Math.round(parent.s * 0.11); y: Math.round(parent.s * (parent.held ? 0.13 : 0.22))
+            width: parent.s - 2 * x; height: Math.round(parent.s * (parent.held ? 0.5 : 0.4))
             radius: parent.r * 0.6
             color: Theme.paper
-            rotation: -2.5
+            rotation: parent.held ? 4 : -2.5
             antialiasing: true
+        }
+        Rectangle { // the picture, as a print with a pale edge
+            visible: parent.held
+            x: Math.round(parent.s * 0.13); y: Math.round(parent.s * 0.07)
+            width: parent.s - 2 * x; height: Math.round(parent.s * 0.54)
+            radius: Math.max(2, parent.r * 0.45)
+            color: Theme.light ? "#ffffff" : Theme.mix(Theme.paper, "#ffffff", 0.3)
+            rotation: -3
+            antialiasing: true
+            Image {
+                id: photo
+                anchors.fill: parent
+                anchors.margins: Math.max(2, Math.round(parent.width * 0.045))
+                source: root.cover.length > 0 ? Fmt.url(root.cover) : ""
+                fillMode: Image.PreserveAspectCrop
+                clip: true
+                asynchronous: true
+                smooth: true
+                mipmap: true
+                sourceSize.width: width * (root.Window.window?.devicePixelRatio ?? 1) * 1.5
+                opacity: status === Image.Ready ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: Theme.fast } }
+            }
         }
         Rectangle { // the front sheet
             id: front
-            x: parent.side; y: Math.round(parent.s * 0.31)
+            x: parent.side; y: Math.round(parent.s * (parent.held ? 0.44 : 0.31))
             width: parent.wide; height: parent.foot - y
             radius: parent.r
             color: Theme.folderFront

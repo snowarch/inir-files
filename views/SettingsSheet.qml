@@ -100,6 +100,7 @@ Sheet {
                 hint: I18n.tr("Pictures, films, documents and covers drawn in place of their icons.")
                 Choice { key: "thumbnails"; options: [{ value: "all", text: I18n.tr("Everywhere") }, { value: "local", text: I18n.tr("This computer") }, { value: "never", text: I18n.tr("Never") }] }
             }
+            Setting { label: I18n.tr("Pictures on folders"); hint: I18n.tr("A folder shows a picture it holds."); Switch { key: "covers" } }
 
             Head { text: I18n.tr("Safety") }
             Setting { label: I18n.tr("Ask before moving to the trash"); Switch { key: "confirmTrash" } }
