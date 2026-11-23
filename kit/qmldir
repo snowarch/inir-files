@@ -1,0 +1,21 @@
+module qs.kit
+Glyph 1.0 Glyph.qml
+Txt 1.0 Txt.qml
+Act 1.0 Act.qml
+Pill 1.0 Pill.qml
+Field 1.0 Field.qml
+Toggle 1.0 Toggle.qml
+Check 1.0 Check.qml
+Segments 1.0 Segments.qml
+Meter 1.0 Meter.qml
+Ring 1.0 Ring.qml
+Scroller 1.0 Scroller.qml
+Hover 1.0 Hover.qml
+FileArt 1.0 FileArt.qml
+FileIcon 1.0 FileIcon.qml
+MenuHost 1.0 MenuHost.qml
+TipHost 1.0 TipHost.qml
+Sheet 1.0 Sheet.qml
+Inset 1.0 Inset.qml
+Card 1.0 Card.qml
+Caption 1.0 Caption.qml

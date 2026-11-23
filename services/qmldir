@@ -1,0 +1,9 @@
+module qs.services
+singleton Theme 1.0 Theme.qml
+singleton Prefs 1.0 Prefs.qml
+singleton I18n 1.0 I18n.qml
+singleton Fmt 1.0 Fmt.qml
+singleton Core 1.0 Core.qml
+singleton Undo 1.0 Undo.qml
+singleton Toast 1.0 Toast.qml
+singleton Errors 1.0 Errors.qml

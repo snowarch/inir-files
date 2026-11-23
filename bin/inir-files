@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# inir-files [PATH|URI]...: each place opens in a window of the running iNiR Files, which starts when none runs.
+set -euo pipefail
+
+here=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+shell="$here/shell.qml"
+
+qs=${INIR_FILES_QS:-}
+if [ -z "$qs" ]; then
+    for c in "${XDG_DATA_HOME:-$HOME/.local/share}/inir/runtime/current/bin/qs" "$(command -v qs || true)"; do
+        if [ -n "$c" ] && [ -x "$c" ]; then qs=$c; break; fi
+    done
+fi
+[ -n "$qs" ] || { echo "inir-files: no qs runtime found; install iNiR or set INIR_FILES_QS" >&2; exit 1; }
+if [ -z "${INIR_FILES_CORE:-}" ] && [ ! -x "$here/core/target/release/inir-files-core" ]; then
+    echo "inir-files: build the core first: cargo build --release --manifest-path $here/core/Cargo.toml" >&2
+    exit 1
+fi
+
+# A file:// URI from a desktop entry becomes a plain path.
+places=()
+for a in "$@"; do
+    case $a in
+        file://*) a=${a#file://}; a=/${a#*/}; a=$(printf "%b" "${a//%/\\x}") ;;
+        *) [ -e "$a" ] && a=$(readlink -f -- "$a") ;;
+    esac
+    places+=("$a")
+done
+
+# One process holds every window: a running one takes the places over IPC.
+if "$qs" ipc -p "$shell" show >/dev/null 2>&1; then
+    if [ ${#places[@]} -eq 0 ]; then
+        exec "$qs" ipc -p "$shell" call files newWindow
+    fi
+    for p in "${places[@]}"; do "$qs" ipc -p "$shell" call files open "$p"; done
+    exit 0
+fi
+
+first=${places[0]:-}
+INIR_FILES_OPEN=$first "$qs" -n -d -p "$shell"
+# The rest wait until the new instance answers.
+for p in "${places[@]:1}"; do
+    for _ in $(seq 50); do "$qs" ipc -p "$shell" show >/dev/null 2>&1 && break; sleep 0.1; done
+    "$qs" ipc -p "$shell" call files open "$p"
+done

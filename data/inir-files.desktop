@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=iNiR Files
+GenericName=File Manager
+Comment=Browse, preview and manage your files
+Exec=inir-files %U
+Icon=system-file-manager
+Terminal=false
+Categories=System;FileTools;FileManager;Core;
+MimeType=inode/directory;
+Keywords=folder;files;explorer;browser;manager;
+StartupNotify=true
+StartupWMClass=inir-files
+Actions=new-window;
+
+[Desktop Action new-window]
+Name=New window
+Exec=inir-files
