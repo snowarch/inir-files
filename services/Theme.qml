@@ -145,6 +145,8 @@ Singleton {
     readonly property color danger: root.light ? "#d70015" : "#ff453a"
     readonly property color warning: root.light ? "#b25000" : "#ffb340"
     readonly property color success: root.light ? "#248a3d" : "#30d158"
+    // The colours a person can give a bookmark, by the name its look keeps.
+    readonly property var tints: ({ accent: root.accentInk, secondary: root.secondary, tertiary: root.tertiary, red: root.danger, amber: root.warning, green: root.success })
 
     // Folders: the accent as two sheets, the back a step deeper, a paper between them.
     readonly property color folderFront: root.light ? root.mix(root.accent, "#ffffff", 0.42) : root.accent

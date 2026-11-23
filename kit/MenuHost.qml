@@ -3,7 +3,7 @@ import QtQuick.Effects
 import qs.services
 
 // Menus inside the window: a card at the pointer, a submenu beside its row, keys to walk them.
-// An entry: { text, glyph, icon, keys, run, danger, enabled, checked, current, tint, fill, keep, sub: [entries] },
+// An entry: { text, glyph, icon, keys, note, run, danger, enabled, checked, current, tint, fill, keep, sub: [entries] },
 // { separator: true } or { header: "text" }. An entry with keep runs and leaves the menu open (Move up, Move down).
 FocusScope {
     id: root
@@ -119,7 +119,7 @@ FocusScope {
             readonly property real need: {
                 let w = 0
                 for (const e of card.entries) {
-                    const t = metrics.advanceWidth(e.text ?? e.header ?? "") * (e.current ? 1.06 : 1) + (e.keys ? metrics.advanceWidth(e.keys) + Theme.dp(28) : 0) + (e.sub ? Theme.dp(22) : 0)
+                    const t = metrics.advanceWidth(e.text ?? e.header ?? "") * (e.current || e.checked === true ? 1.06 : 1) + (e.keys || e.note ? metrics.advanceWidth(e.keys ?? e.note) + Theme.dp(28) : 0) + (e.sub ? Theme.dp(22) : 0)
                     w = Math.max(w, t)
                 }
                 // The row's margins: the card's 6 on each side, the lead glyph (8 + 22 + 6) or 12, then 10 and 10 at the end.
@@ -176,6 +176,8 @@ FocusScope {
                         readonly property bool header: row.modelData.header !== undefined
                         readonly property bool on: (root.currents[card.index] ?? -1) === row.index
                         readonly property bool usable: row.modelData.enabled !== false
+                        // The chosen one of a set, or a switch that is on: accent ink, a filled glyph.
+                        readonly property bool chosen: row.modelData.current === true || row.modelData.checked === true
                         width: col.width
                         height: row.sep ? Theme.dp(9) : row.header ? Theme.dp(26) : Theme.dp(32)
                         Rectangle {
@@ -207,10 +209,11 @@ FocusScope {
                             Glyph {
                                 anchors.centerIn: parent
                                 visible: !row.modelData.icon
-                                name: row.modelData.checked === true ? "check" : row.modelData.checked === false ? "" : (row.modelData.glyph ?? "")
+                                // A row with a glyph keeps it and fills it when on; a bare choice shows a check.
+                                name: row.modelData.glyph ? row.modelData.glyph : row.modelData.checked === true ? "check" : ""
                                 size: Theme.dp(18)
-                                weight: row.modelData.checked === true ? 600 : 400
-                                fill: row.modelData.fill ?? (row.modelData.current ? 1 : 0)
+                                weight: !row.modelData.glyph && row.modelData.checked === true ? 600 : 400
+                                fill: row.modelData.fill ?? (row.chosen ? 1 : 0)
                                 color: row.modelData.danger ? Theme.danger : row.modelData.tint ? row.modelData.tint
                                      : row.modelData.checked === true || row.modelData.current ? Theme.accentInk : Theme.ink2
                             }
@@ -231,8 +234,8 @@ FocusScope {
                             anchors.rightMargin: Theme.dp(10)
                             height: parent.height
                             text: row.modelData.text ?? ""
-                            strong: row.modelData.current === true
-                            color: row.modelData.danger ? Theme.danger : row.modelData.current ? Theme.accentInk : Theme.ink
+                            strong: row.chosen
+                            color: row.modelData.danger ? Theme.danger : row.chosen ? Theme.accentInk : Theme.ink
                             opacity: row.usable ? 1 : 0.4
                         }
                         Txt {
@@ -241,7 +244,7 @@ FocusScope {
                             anchors.right: chevron.visible ? chevron.left : parent.right
                             anchors.rightMargin: Theme.dp(10)
                             height: parent.height
-                            text: row.modelData.keys ?? ""
+                            text: row.modelData.keys ?? row.modelData.note ?? ""
                             size: Theme.small
                             color: Theme.ink3
                         }

@@ -85,6 +85,45 @@ Item {
     }
     function copyPath(pane: var): void { root.copyText(root.chosenOrHere(pane).join("\n")) }
 
+    // ---- sending: the chosen moved or copied to a folder at hand, with no second window to open
+    // Where they can go: the other side of a split, the folders sent to last, the bookmarks, a mounted drive one can
+    // unplug, home. Each once, never the folder they are in, nor one inside what goes.
+    function destinations(pane: var, paths: var): var {
+        const out = [], seen = {}
+        const from = root.here(pane)
+        const home = Core.places.home || Core.home
+        const looks = Prefs.get("marks") ?? {}
+        const marks = {}, drives = {}
+        for (const b of Core.places.bookmarks) if (!b.remote && b.exists) marks[b.path] = b
+        for (const d of Core.places.devices) if (d.removable && d.mounted && !d.readonly) drives[d.path] = d.label || d.model || Fmt.name(d.path)
+        // Under each name, the folder it is in, short: a recent folder may share its name with another.
+        const where = path => {
+            const up = Fmt.parent(path), shown = Fmt.pretty(up)
+            return shown.length <= 22 ? shown : "…/" + Fmt.name(up)
+        }
+        const add = (path, glyph, tint, bare) => {
+            if (!path || seen[path] || path === from || paths.some(p => p === path || path.startsWith(p + "/"))) return
+            seen[path] = true
+            const name = path === home ? I18n.tr("Home") : marks[path]?.name ?? drives[path] ?? Fmt.name(path)
+            out.push({ path: path, name: name, glyph: glyph, note: bare || path === home ? "" : where(path), tint: tint ? Theme.tints[tint] : undefined })
+        }
+        const other = root.browser.currentPage?.otherPane(pane)
+        if (other && other.folder.mode === "folder") add(other.folder.path, "vertical_split")
+        for (const p of Prefs.recall("sentTo", [])) add(p, "history")
+        for (const p in marks) add(p, looks[p]?.glyph ?? "bookmark", looks[p]?.tint)
+        for (const p in drives) add(p, "usb", undefined, true)
+        add(home, "home")
+        return out
+    }
+    function sendEntries(pane: var, paths: var, op: string): var {
+        return root.destinations(pane, paths).map(d => ({ text: d.name, glyph: d.glyph, note: d.note, tint: d.tint, run: () => root.send(paths, d.path, op) }))
+    }
+    function send(paths: var, dest: string, op: string): void {
+        const n = paths.length
+        root.job(op, { paths: paths, dest: dest }, op === "move" ? I18n.n("%1 item moved", "%1 items moved", n) : I18n.n("%1 item copied", "%1 items copied", n))
+        Prefs.remember("sentTo", [dest].concat(Prefs.recall("sentTo", []).filter(p => p !== dest)).slice(0, 4))
+    }
+
     // ---- drag and drop
     // True when the drop makes no sense: nothing local, a folder into itself, files into the folder they are in.
     function dropRefused(urls: var, dest: string, here: bool): bool {
@@ -419,6 +458,9 @@ Item {
             out.push({ text: I18n.tr("Cut"), glyph: "content_cut", keys: "Ctrl+X", enabled: writable, run: () => root.cut(pane) })
             out.push({ text: I18n.tr("Copy"), glyph: "content_copy", keys: "Ctrl+C", run: () => root.copy(pane) })
             if (one && one.dir) out.push({ text: I18n.tr("Paste into folder"), glyph: "content_paste", run: () => root.paste(pane, one.path) })
+            const moveTo = root.sendEntries(pane, paths, "move"), copyTo = root.sendEntries(pane, paths, "copy")
+            out.push({ text: I18n.tr("Move to"), glyph: "drive_file_move", enabled: writable && moveTo.length > 0, sub: moveTo })
+            out.push({ text: I18n.tr("Copy to"), glyph: "folder_copy", enabled: copyTo.length > 0, sub: copyTo })
             out.push({ text: I18n.tr("Duplicate"), glyph: "file_copy", keys: "Ctrl+D", enabled: writable, run: () => root.duplicate(pane) })
             out.push({ text: I18n.tr("Make link"), glyph: "link", enabled: writable && f.mode === "folder", run: () => root.link(pane) })
             out.push({ separator: true })

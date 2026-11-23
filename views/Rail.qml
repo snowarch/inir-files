@@ -24,7 +24,6 @@ Item {
     property int dragTo: -1
     property int insertAt: -1
     property Item insertBy: null
-    readonly property var tints: ({ accent: Theme.accentInk, secondary: Theme.secondary, tertiary: Theme.tertiary, red: Theme.danger, amber: Theme.warning, green: Theme.success })
     readonly property var glyphChoices: [
         { glyph: "bookmark", text: I18n.tr("Bookmark") }, { glyph: "folder", text: I18n.tr("Folder") }, { glyph: "star", text: I18n.tr("Star") },
         { glyph: "favorite", text: I18n.tr("Heart") }, { glyph: "work", text: I18n.tr("Work") }, { glyph: "school", text: I18n.tr("Study") },
@@ -217,7 +216,7 @@ Item {
             name: place.it.glyph
             size: Theme.dp(19)
             fill: place.current || place.full ? 1 : 0
-            color: place.current ? Theme.accentInk : place.it.tint ? (root.tints[place.it.tint] ?? Theme.inkNav) : Theme.inkNav
+            color: place.current ? Theme.accentInk : place.it.tint ? (Theme.tints[place.it.tint] ?? Theme.inkNav) : Theme.inkNav
             opacity: place.it.missing || (place.it.kind === "device" && !place.it.mounted) ? 0.55 : 1
         }
         Txt {
@@ -379,7 +378,7 @@ Item {
             out.push({ text: I18n.tr("Icon"), glyph: own.glyph || "bookmark", sub: root.glyphChoices.map(c => ({
                 text: c.text, glyph: c.glyph, current: (own.glyph || "bookmark") === c.glyph, run: () => root.look(it.path, "glyph", c.glyph) })) })
             out.push({ text: I18n.tr("Color"), glyph: "palette", sub: root.tintChoices.map(c => ({
-                text: c.text, glyph: "circle", fill: 1, tint: c.key ? root.tints[c.key] : Theme.inkNav, current: (own.tint ?? "") === c.key,
+                text: c.text, glyph: "circle", fill: 1, tint: c.key ? Theme.tints[c.key] : Theme.inkNav, current: (own.tint ?? "") === c.key,
                 run: () => root.look(it.path, "tint", c.key) })) })
             out.push({ text: I18n.tr("Move up"), glyph: "arrow_upward", keep: true, enabled: index > 0, run: () => root.moveFromMenu(it, index, -1) })
             out.push({ text: I18n.tr("Move down"), glyph: "arrow_downward", keep: true, enabled: index < root.marks.length - 1, run: () => root.moveFromMenu(it, index, 1) })
