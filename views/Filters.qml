@@ -100,34 +100,59 @@ Item {
         height: Theme.dp(20)
         color: Theme.line
     }
-    // The chips that do not fit slide under the wheel.
-    Flickable {
+    // The chips that do not fit slide under the wheel or the touchpad.
+    Item {
         id: lane
         anchors.left: rule.right
         anchors.leftMargin: Theme.dp(10)
         anchors.right: scope.visible ? scope.left : parent.right
         anchors.rightMargin: Theme.dp(12)
         height: parent.height
-        contentWidth: chips.width
-        contentHeight: height
-        flickableDirection: Flickable.HorizontalFlick
-        boundsBehavior: Flickable.StopAtBounds
-        interactive: lane.contentWidth > lane.width
         clip: true
+        property real offset: 0
+        readonly property real room: Math.max(0, chips.width - lane.width)
+        onRoomChanged: lane.offset = Math.min(lane.offset, lane.room)
+        // Under the chips: a chip passes the wheel on, a click stays the chip's.
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.NoButton
+            enabled: lane.room > 0
+            onWheel: wheel => {
+                const px = wheel.pixelDelta.y !== 0 ? wheel.pixelDelta.y : wheel.pixelDelta.x
+                const d = px !== 0 ? px : (wheel.angleDelta.y !== 0 ? wheel.angleDelta.y : wheel.angleDelta.x) / 2
+                lane.offset = Math.max(0, Math.min(lane.room, lane.offset - d))
+            }
+        }
         Row {
             id: chips
+            x: -lane.offset
             height: lane.height
             spacing: Theme.dp(6)
             move: Transition { NumberAnimation { properties: "x"; duration: Theme.fast; easing.type: Easing.OutCubic } }
             Repeater { model: root.kinds; delegate: Chip {} }
-            WheelHandler {
-                target: null
-                enabled: lane.interactive
-                onWheel: event => {
-                    const d = event.angleDelta.y !== 0 ? event.angleDelta.y : event.angleDelta.x
-                    lane.contentX = Math.max(0, Math.min(lane.contentWidth - lane.width, lane.contentX - d / 2))
-                }
-            }
+        }
+    }
+    // A cut edge fades out, so the chips past it read as more to see, not as missing.
+    Rectangle {
+        visible: lane.offset > 0
+        anchors.left: lane.left
+        width: Theme.dp(28)
+        height: lane.height
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0; color: Theme.canvas }
+            GradientStop { position: 1; color: Theme.alpha(Theme.canvas, 0) }
+        }
+    }
+    Rectangle {
+        visible: lane.offset < lane.room
+        anchors.right: lane.right
+        width: Theme.dp(28)
+        height: lane.height
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0; color: Theme.alpha(Theme.canvas, 0) }
+            GradientStop { position: 1; color: Theme.canvas }
         }
     }
     Txt {
