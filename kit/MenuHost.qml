@@ -125,7 +125,8 @@ FocusScope {
                 // The row's margins: the card's 6 on each side, the lead glyph (8 + 22 + 6) or 12, then 10 and 10 at the end.
                 return w + Theme.dp(card.anyGlyph ? 70 : 46)
             }
-            width: Math.max(Theme.dp(190), Math.min(Theme.dp(380), card.need))
+            // Wide enough for a long name, up to half the window; what is longer still loses its middle, not its end.
+            width: Math.max(Theme.dp(190), Math.min(Math.max(Theme.dp(380), Math.min(Theme.dp(560), root.width / 2)), card.need))
             height: col.implicitHeight + Theme.dp(12)
             // Kept inside the window; a submenu that does not fit on the right opens on the left.
             x: {
@@ -190,9 +191,11 @@ FocusScope {
                         Caption {
                             visible: row.header
                             x: Theme.dp(10)
+                            width: parent.width - Theme.dp(20)
                             anchors.bottom: parent.bottom
                             anchors.bottomMargin: Theme.dp(4)
                             text: row.modelData.header ?? ""
+                            elide: Text.ElideMiddle
                         }
                         Rectangle {
                             visible: !row.sep && !row.header
@@ -234,6 +237,7 @@ FocusScope {
                             anchors.rightMargin: Theme.dp(10)
                             height: parent.height
                             text: row.modelData.text ?? ""
+                            elide: Text.ElideMiddle
                             strong: row.chosen
                             color: row.modelData.danger ? Theme.danger : row.chosen ? Theme.accentInk : Theme.ink
                             opacity: row.usable ? 1 : 0.4
