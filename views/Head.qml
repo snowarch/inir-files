@@ -10,8 +10,8 @@ Item {
     readonly property var pane: root.browser.activePane
     readonly property var folder: root.pane ? root.pane.folder : null
     property bool searchOpen: false
-    // Too narrow for the view switch: the More menu offers it instead.
-    readonly property bool compact: root.width < Theme.dp(600)
+    // Too narrow for the view switch: the More menu offers it instead, and the path keeps room to be read.
+    readonly property bool compact: root.width < Theme.dp(680)
     implicitHeight: Theme.dp(58)
 
     function startSearch(text: string): void {

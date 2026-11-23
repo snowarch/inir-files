@@ -108,6 +108,21 @@ Inset {
         })
     }
 
+    // Steps cut at the left edge fade out, so the cut reads as more to see, not as broken text.
+    Rectangle {
+        z: 1
+        visible: flick.visible && flick.contentX > 0
+        x: flick.x
+        y: 1
+        width: Theme.dp(24)
+        height: root.height - 2
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0; color: root.color }
+            GradientStop { position: 1; color: Theme.alpha(root.color, 0) }
+        }
+    }
+
     // ---- the steps
     Flickable {
         id: flick
@@ -175,7 +190,8 @@ Inset {
                                 strong: crumb.last
                                 color: crumb.last ? Theme.ink : Theme.ink2
                                 elide: Text.ElideMiddle
-                                width: Math.min(implicitWidth, Theme.dp(220))
+                                // The last step never runs past the bar: it gives up its middle first.
+                                width: Math.min(implicitWidth, Theme.dp(220), crumb.last ? Math.max(Theme.dp(40), flick.width - Theme.dp(crumb.modelData.glyph.length > 0 ? 54 : 32)) : Theme.dp(220))
                             }
                         }
                         MouseArea {
