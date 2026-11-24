@@ -2,6 +2,7 @@ module qs.views
 Folder 1.0 Folder.qml
 Listing 1.0 Listing.qml
 Pane 1.0 Pane.qml
+HomePane 1.0 HomePane.qml
 GridPane 1.0 GridPane.qml
 ListPane 1.0 ListPane.qml
 ColumnsPane 1.0 ColumnsPane.qml

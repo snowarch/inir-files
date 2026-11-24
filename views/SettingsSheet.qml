@@ -112,6 +112,7 @@ Sheet {
                 Setting { label: I18n.tr("Show hidden files"); Switch { key: "hidden" } }
                 Setting { label: I18n.tr("Folders first"); Switch { key: "dirsFirst" } }
                 Setting { label: I18n.tr("Count what folders hold"); Switch { key: "counts" } }
+                Setting { label: I18n.tr("Start page"); hint: I18n.tr("Open new windows on Start instead of Home."); Switch { key: "start" } }
                 Setting { label: I18n.tr("Reopen the last tabs"); Switch { key: "restoreTabs" } }
                 Setting {
                     label: I18n.tr("Previews")

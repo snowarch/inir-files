@@ -34,6 +34,7 @@ Singleton {
         aside: true,
         rail: true,
         counts: true,
+        start: true,
         restoreTabs: true,
         typeAhead: true,
         marks: ({}),            // a bookmark's own look: { path: { glyph, tint } }

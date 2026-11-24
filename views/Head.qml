@@ -178,7 +178,7 @@ Item {
             }
         }
         Segments {
-            visible: !root.compact
+            visible: !root.compact && (!root.folder || root.folder.mode !== "start")
             anchors.verticalCenter: parent.verticalCenter
             value: root.pane ? root.pane.viewMode : "grid"
             options: [
@@ -191,6 +191,7 @@ Item {
         }
         Act {
             id: sortAct
+            visible: !root.folder || root.folder.mode !== "start"
             anchors.verticalCenter: parent.verticalCenter
             glyph: "sort"
             tip: I18n.tr("Sort")

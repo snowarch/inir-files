@@ -21,6 +21,9 @@ Singleton {
     property var schemePal: ({})
     readonly property var pal: root.appPal.surface !== undefined ? root.appPal : root.schemePal
     property string systemMode: "dark"
+    property string themeWallpaper: ""
+    property string configWallpaper: ""
+    readonly property string wallpaper: root.themeWallpaper || root.configWallpaper
     property var look: ({})
     // Until the shell hands its look (a shell from before app-look.json), its own config's typography stands in.
     property var typography: ({})
@@ -53,7 +56,11 @@ Singleton {
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
-        onLoaded: root.systemMode = root.parse(text()).mode === "light" ? "light" : "dark"
+        onLoaded: {
+            const m = root.parse(text())
+            root.systemMode = m.mode === "light" ? "light" : "dark"
+            root.themeWallpaper = typeof m.source_path === "string" ? m.source_path : ""
+        }
     }
     FileView {
         path: root.stateHome + "/quickshell/user/generated/app-look.json"
@@ -70,7 +77,11 @@ Singleton {
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
-        onLoaded: root.typography = root.parse(text())?.appearance?.typography ?? ({})
+        onLoaded: {
+            const c = root.parse(text())
+            root.typography = c?.appearance?.typography ?? ({})
+            root.configWallpaper = typeof c?.background?.wallpaperPath === "string" ? c.background.wallpaperPath : ""
+        }
     }
 
     // ---- colour arithmetic

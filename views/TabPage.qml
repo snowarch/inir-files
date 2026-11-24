@@ -16,6 +16,7 @@ Item {
     readonly property string glyph: root.glyphOf(root.activePane.folder)
 
     function titleOf(f: var): string {
+        if (f.mode === "start") return I18n.tr("Start")
         if (f.mode === "trash") return I18n.tr("Trash")
         if (f.mode === "recent") return I18n.tr("Recent")
         if (f.mode === "search") return I18n.tr("Search “%1”", f.query)
@@ -24,6 +25,7 @@ Item {
         return Fmt.name(f.path)
     }
     function glyphOf(f: var): string {
+        if (f.mode === "start") return "space_dashboard"
         if (f.mode === "trash") return "delete"
         if (f.mode === "recent") return "schedule"
         if (f.mode === "search") return "search"

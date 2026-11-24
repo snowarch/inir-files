@@ -8,7 +8,7 @@ Item {
     visible: false
 
     property string path: Core.home
-    property string mode: "folder"          // folder, trash, recent, search
+    property string mode: "folder"          // folder, trash, recent, search, start
     readonly property string place: root.mode === "folder" ? root.path : root.mode === "search" ? root.searchRoot : root.mode + ":"
     property alias model: entries
     property var all: []
@@ -96,7 +96,7 @@ Item {
     }
     function enter(target: string): void {
         if (root.mode === "search") root.stopSearch()
-        if (target === "trash:" || target === "recent:") {
+        if (target === "trash:" || target === "recent:" || target === "start:") {
             root.mode = target.slice(0, -1)
         } else {
             root.mode = "folder"
@@ -148,6 +148,7 @@ Item {
         const done = r => root.apply(serial, r, keep)
         if (root.mode === "trash") Core.call("trash_list", {}, done)
         else if (root.mode === "recent") Core.call("recent", {}, done)
+        else if (root.mode === "start") { if (keep) Core.refreshPlaces(); Core.call("recent", {}, done) }
         else if (root.mode === "search") root.runSearch()
         else Core.call("list", { path: root.path, hidden: root.showHidden, sort: root.sortKey, desc: root.desc, dirsFirst: root.dirsFirst, counts: Prefs.get("counts") }, done)
     }

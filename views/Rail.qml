@@ -76,7 +76,8 @@ Item {
         music: I18n.tr("Music"), pictures: I18n.tr("Pictures"), videos: I18n.tr("Videos") })
 
     readonly property var own: {
-        const out = [{ path: root.places.home || Core.home, name: I18n.tr("Home"), glyph: "home", kind: "place" },
+        const out = [{ path: "start:", name: I18n.tr("Start"), glyph: "space_dashboard", kind: "start" },
+            { path: root.places.home || Core.home, name: I18n.tr("Home"), glyph: "home", kind: "place" },
             { path: "recent:", name: I18n.tr("Recent"), glyph: "schedule", kind: "recent" }]
         for (const role of ["desktop", "documents", "downloads", "music", "pictures", "videos"]) {
             const d = (root.places.xdg ?? []).find(x => x.role === role)
@@ -332,7 +333,7 @@ Item {
         // A drop goes into the place; on a bookmark's top or bottom edge, a folder joins the bookmarks there.
         DropArea {
             anchors.fill: parent
-            enabled: place.it.kind !== "recent" && place.it.kind !== "connect" && (place.mark || !place.it.missing) && (place.it.kind !== "device" || place.it.mounted)
+            enabled: place.it.kind !== "recent" && place.it.kind !== "start" && place.it.kind !== "connect" && (place.mark || !place.it.missing) && (place.it.kind !== "device" || place.it.mounted)
             function slot(y: real): int {
                 if (!place.mark) return -1
                 if (y < place.height * 0.3) return place.index
@@ -389,7 +390,7 @@ Item {
         if (it.remote) {
             out.push({ separator: true })
             out.push({ text: I18n.tr("Copy address"), glyph: "link", run: () => root.browser.actions.copyText(it.path) })
-        } else if (it.kind !== "recent" && it.kind !== "trash") {
+        } else if (it.kind !== "recent" && it.kind !== "trash" && it.kind !== "start") {
             out.push({ text: I18n.tr("Open in terminal"), glyph: "terminal", run: () => root.browser.actions.terminal(it.path) })
             out.push({ separator: true })
             out.push({ text: I18n.tr("Copy path"), glyph: "content_copy", run: () => root.browser.actions.copyText(it.path) })
@@ -415,7 +416,7 @@ Item {
             out.push({ separator: true })
             out.push({ text: it.server ? I18n.tr("Disconnect") : it.removable ? I18n.tr("Eject") : I18n.tr("Unmount"), glyph: "eject", run: () => root.eject(it) })
         }
-        if (it.kind !== "recent" && it.kind !== "trash" && !it.remote) out.push({ text: I18n.tr("Properties"), glyph: "info", keys: "Alt+Enter", run: () => root.browser.actions.propertiesOf([it.path]) })
+        if (it.kind !== "recent" && it.kind !== "trash" && it.kind !== "start" && !it.remote) out.push({ text: I18n.tr("Properties"), glyph: "info", keys: "Alt+Enter", run: () => root.browser.actions.propertiesOf([it.path]) })
         return out
     }
 

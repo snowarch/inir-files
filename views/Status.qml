@@ -25,6 +25,10 @@ Item {
             if (f.selCount === 1 && chosen[0]) text = chosen[0].name + " · " + (chosen[0].dir ? (chosen[0].items >= 0 ? Fmt.items(chosen[0].items) : I18n.tr("Folder")) : Fmt.size(chosen[0].size))
             return text
         }
+        if (f.mode === "start") {
+            const rootDisk = (Core.places.devices ?? []).find(d => d.root)
+            return rootDisk && rootDisk.size > 0 ? I18n.tr("%1 free of %2", Fmt.size(rootDisk.free), Fmt.size(rootDisk.size)) : ""
+        }
         if (f.mode === "search") {
             const found = f.kindFilter.length > 0 ? I18n.tr("%1 of %2 results", Fmt.num(count, 0), Fmt.num(f.found.length, 0)) : I18n.n("%1 result", "%1 results", count)
             return (f.searching ? I18n.tr("Searching · ") : "") + found
@@ -78,7 +82,7 @@ Item {
         // The size of what is shown: pictures in the grid, rows in the list.
         Item {
             id: zoom
-            visible: !!root.pane
+            visible: !!root.pane && (!root.folder || root.folder.mode !== "start")
             anchors.verticalCenter: parent.verticalCenter
             width: Theme.dp(110)
             height: Theme.dp(24)

@@ -18,6 +18,7 @@ Inset {
     readonly property var crumbs: {
         const f = root.folder
         if (!f) return []
+        if (f.mode === "start") return [{ path: "start:", name: I18n.tr("Start"), glyph: "space_dashboard" }]
         if (f.mode === "trash") return [{ path: "trash:", name: I18n.tr("Trash"), glyph: "delete" }]
         if (f.mode === "recent") return [{ path: "recent:", name: I18n.tr("Recent"), glyph: "schedule" }]
         const base = f.mode === "search" ? f.searchRoot : f.path
@@ -235,7 +236,7 @@ Inset {
                         }
                         DropArea {
                             anchors.fill: parent
-                            enabled: crumb.modelData.path.length > 0 && crumb.modelData.path !== "recent:"
+                            enabled: crumb.modelData.path.length > 0 && crumb.modelData.path !== "recent:" && crumb.modelData.path !== "start:"
                             onEntered: drag => {
                                 if (!drag.hasUrls || root.browser.actions.dropRefused(drag.urls, crumb.modelData.path)) { drag.accepted = false; return }
                                 plate.dropping = true

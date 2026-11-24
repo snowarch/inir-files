@@ -44,7 +44,7 @@ FocusScope {
                 const v = root.view
                 if (!v) return
                 if (y !== undefined && folder.current < 0) v.contentY = Math.min(y, Math.max(v.originY - v.topMargin, v.contentHeight - v.height + v.originY + v.bottomMargin))
-                else if (folder.current < 0) v.positionViewAtBeginning()
+                else if (folder.current < 0) { if (v.positionViewAtBeginning) v.positionViewAtBeginning(); else v.contentY = v.originY }
             })
         }
     }
@@ -134,6 +134,14 @@ FocusScope {
         const v = loader.item
         if (!v) return
         const k = event.key
+        if (f.mode === "start") {
+            if (k === Qt.Key_Up || k === Qt.Key_Down || k === Qt.Key_PageUp || k === Qt.Key_PageDown) { v.step(-1, k); event.accepted = true; return }
+            if (k === Qt.Key_Home && root.view) { root.view.contentY = 0; event.accepted = true; return }
+            if (k === Qt.Key_End && root.view) { root.view.contentY = Math.max(0, root.view.contentHeight - root.view.height); event.accepted = true; return }
+            if (k === Qt.Key_Backspace && f.back.length > 0) { f.goBack(); event.accepted = true; return }
+            if (!ctrl && event.text.length === 1 && event.text >= " " && event.text !== "\u007f") { root.browser.head.startSearch(event.text); event.accepted = true }
+            return
+        }
         if ((k === Qt.Key_Left || k === Qt.Key_Right) && v.lateral && !ctrl && !shift && v.lateral(k)) { event.accepted = true; return }
         if (k === Qt.Key_Home) { f.moveTo(0, shift, ctrl); event.accepted = true; return }
         if (k === Qt.Key_End) { f.moveTo(f.model.count - 1, shift, ctrl); event.accepted = true; return }
@@ -230,9 +238,10 @@ FocusScope {
         id: loader
         anchors.fill: parent
         focus: true
-        sourceComponent: root.viewMode === "list" ? listView : root.viewMode === "columns" ? columnsView : root.viewMode === "gallery" ? galleryView : gridView
+        sourceComponent: folder.mode === "start" ? homeView : root.viewMode === "list" ? listView : root.viewMode === "columns" ? columnsView : root.viewMode === "gallery" ? galleryView : gridView
     }
     NumberAnimation { id: arrive; target: loader; property: "opacity"; from: 0; to: 1; duration: Theme.fast; easing.type: Easing.OutCubic }
+    Component { id: homeView; HomePane { pane: root } }
     Component { id: gridView; GridPane { pane: root } }
     Component { id: listView; ListPane { pane: root } }
     Component { id: columnsView; ColumnsPane { pane: root } }
@@ -243,7 +252,7 @@ FocusScope {
         acceptedButtons: Qt.NoButton
         property real wheelSum: 0
         onWheel: wheel => {
-            if (!(wheel.modifiers & (Qt.ControlModifier | Qt.AltModifier))) { wheel.accepted = false; return }
+            if (folder.mode === "start" || !(wheel.modifiers & (Qt.ControlModifier | Qt.AltModifier))) { wheel.accepted = false; return }
             const d = wheel.angleDelta.y || wheel.angleDelta.x
             if (d * wheelSum < 0) wheelSum = 0
             wheelSum += d
@@ -255,6 +264,7 @@ FocusScope {
     // ---- the place has nothing to show
     readonly property string blank: {
         const f = folder
+        if (f.mode === "start") return ""
         if (f.error.length > 0) return "error"
         if (f.loading || f.model.count > 0) return ""
         if (f.mode === "search") return f.searching ? "searching" : f.found.length > 0 ? "filtered" : (f.query.length > 0 ? "nothing" : "")

@@ -63,8 +63,9 @@ FloatingWindow {
     }
 
     // ---- tabs
+    function defaultPlace(): string { return Prefs.get("start") === true ? "start:" : Core.home }
     function newTab(path: string, chosen: var): void {
-        const page = pageComponent.createObject(pages, { browser: root, startPath: path && path.length > 0 ? path : Core.home, startChosen: chosen ?? [] })
+        const page = pageComponent.createObject(pages, { browser: root, startPath: path && path.length > 0 ? path : root.defaultPlace(), startChosen: chosen ?? [] })
         page.anchors.fill = pages
         page.visible = Qt.binding(() => root.currentPage === page)
         root.tabs = root.tabs.concat([page])
@@ -113,7 +114,7 @@ FloatingWindow {
     Timer {
         id: saveTabs
         interval: 1500
-        onTriggered: Prefs.remember("tabs", { paths: root.tabs.map(p => p.activePane.folder.place).filter(p => p !== "recent:" && p.indexOf(":") < 0 || p === "trash:"), index: root.tabIndex })
+        onTriggered: Prefs.remember("tabs", { paths: root.tabs.map(p => p.activePane.folder.place).filter(p => p.indexOf(":") < 0 || p === "trash:" || p === "start:"), index: root.tabIndex })
     }
     Connections {
         target: root.activePane ? root.activePane.folder : null
@@ -287,8 +288,8 @@ FloatingWindow {
     Key { sequence: "F2"; onActivated: root.actions.rename(root.pane) }
     Key { sequence: "Ctrl+D"; onActivated: root.actions.duplicate(root.pane) }
     Key { sequence: "Ctrl+B"; onActivated: if (root.actions.here(root.pane).length > 0) root.actions.bookmark(root.actions.here(root.pane)) }
-    Key { sequences: [StandardKey.SelectAll]; onActivated: root.pane.folder.selectAll() }
-    Key { sequence: "Ctrl+Shift+I"; onActivated: root.pane.folder.invertSel() }
+    Key { sequences: [StandardKey.SelectAll]; onActivated: if (root.pane.folder.mode !== "start") root.pane.folder.selectAll() }
+    Key { sequence: "Ctrl+Shift+I"; onActivated: if (root.pane.folder.mode !== "start") root.pane.folder.invertSel() }
     Key { sequence: "Ctrl+H"; always: true; onActivated: Prefs.set("hidden", !Prefs.get("hidden")) }
     Key { sequence: "Ctrl+L"; always: true; onActivated: root.head.editPath() }
     Key { sequences: [StandardKey.Find]; always: true; onActivated: root.head.focusSearch() }
@@ -307,7 +308,7 @@ FloatingWindow {
     Key { sequence: "Ctrl+N"; always: true; onActivated: root.newWindow(root.pane ? root.pane.folder.place : "") }
     Key { sequences: [StandardKey.Undo]; onActivated: root.actions.undo() }
     Key { sequences: ["Ctrl+Shift+Z", "Ctrl+Y"]; onActivated: root.actions.redo() }
-    Key { sequence: "Ctrl+S"; onActivated: root.actions.selectByName(root.pane) }
+    Key { sequence: "Ctrl+S"; onActivated: if (root.pane.folder.mode !== "start") root.actions.selectByName(root.pane) }
     Key { sequence: "Ctrl+1"; always: true; onActivated: root.actions.setView("grid") }
     Key { sequence: "Ctrl+2"; always: true; onActivated: root.actions.setView("list") }
     Key { sequence: "Ctrl+3"; always: true; onActivated: root.actions.setView("columns") }

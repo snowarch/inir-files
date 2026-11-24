@@ -395,7 +395,8 @@ Item {
     }
     function moreEntries(pane: var, compact: bool): var {
         const page = root.browser.currentPage
-        const view = compact ? [{ text: I18n.tr("View"), glyph: "grid_view", sub: root.viewEntries() }] : []
+        const start = pane && pane.folder.mode === "start"
+        const view = compact && !start ? [{ text: I18n.tr("View"), glyph: "grid_view", sub: root.viewEntries() }] : []
         return view.concat([
             { text: I18n.tr("New folder"), glyph: "create_new_folder", keys: "Ctrl+Shift+N", enabled: root.here(pane).length > 0, run: () => root.newFolder(pane) },
             { text: I18n.tr("New tab"), glyph: "tab", keys: "Ctrl+T", run: () => root.browser.newTab(pane.folder.place) },
@@ -405,9 +406,9 @@ Item {
             { text: I18n.tr("Connect to server…"), glyph: "add_link", run: () => root.connect("", false) },
             { separator: true },
             { text: I18n.tr("Show hidden files"), glyph: "visibility", keys: "Ctrl+H", checked: Prefs.get("hidden") === true, run: () => Prefs.set("hidden", !Prefs.get("hidden")) },
-            { text: I18n.tr("Select all"), glyph: "select_all", keys: "Ctrl+A", run: () => pane.folder.selectAll() },
-            { text: I18n.tr("Invert selection"), glyph: "flip", keys: "Ctrl+Shift+I", run: () => pane.folder.invertSel() },
-            { text: I18n.tr("Select by name…"), glyph: "checklist", keys: "Ctrl+S", run: () => root.selectByName(pane) },
+            { text: I18n.tr("Select all"), glyph: "select_all", keys: "Ctrl+A", enabled: !start, run: () => pane.folder.selectAll() },
+            { text: I18n.tr("Invert selection"), glyph: "flip", keys: "Ctrl+Shift+I", enabled: !start, run: () => pane.folder.invertSel() },
+            { text: I18n.tr("Select by name…"), glyph: "checklist", keys: "Ctrl+S", enabled: !start, run: () => root.selectByName(pane) },
             { separator: true },
             { text: Undo.can ? Undo.label : I18n.tr("Undo"), glyph: "undo", keys: "Ctrl+Z", enabled: Undo.can, run: () => root.undo() },
             { text: Undo.canRedo ? Undo.redoLabel : I18n.tr("Redo"), glyph: "redo", keys: "Ctrl+Shift+Z", enabled: Undo.canRedo, run: () => root.redo() },
@@ -473,7 +474,7 @@ Item {
             }
             if (dirs.length === 0 || one) out.push({ text: I18n.tr("Open with"), glyph: "apps", sub: root.openWithEntries(list, apps) })
             if (one && (one.kind === "image" || one.kind === "video")) out.push({ text: I18n.tr("Set as wallpaper"), glyph: "wallpaper", run: () => root.setWallpaper(one.path) })
-            if (f.mode === "search" || f.mode === "recent") out.push({ text: I18n.tr("Show in folder"), glyph: "folder_open", enabled: !!one, run: () => { f.go(Fmt.parent(one.path)); f.focusPath = one.path } })
+            if (f.mode === "search" || f.mode === "recent" || f.mode === "start") out.push({ text: I18n.tr("Show in folder"), glyph: "folder_open", enabled: !!one, run: () => { f.go(Fmt.parent(one.path)); f.focusPath = one.path } })
             out.push({ separator: true })
             out.push({ text: I18n.tr("Cut"), glyph: "content_cut", keys: "Ctrl+X", enabled: writable, run: () => root.cut(pane) })
             out.push({ text: I18n.tr("Copy"), glyph: "content_copy", keys: "Ctrl+C", run: () => root.copy(pane) })

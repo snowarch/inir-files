@@ -157,10 +157,11 @@ Item {
         return out
     }
 
-    // ---- what a place without a file of its own says (trash, recent, search)
+    // ---- what a place without a file of its own says (start, trash, recent, search)
     readonly property var placeFace: {
         const f = root.folder
         if (!f) return ({})
+        if (f.mode === "start") return { glyph: "space_dashboard", title: I18n.tr("Start"), text: Core.places.host ?? "" }
         if (f.mode === "trash") return { glyph: "delete", title: I18n.tr("Trash"), text: Fmt.items(f.model.count) }
         if (f.mode === "recent") return { glyph: "schedule", title: I18n.tr("Recent"), text: Fmt.items(f.model.count) }
         return { glyph: "search", title: I18n.tr("Search"), text: f.searching ? I18n.tr("Searching…") : I18n.n("%1 result", "%1 results", f.model.count) }
