@@ -12,6 +12,8 @@ Item {
     readonly property string place: root.mode === "folder" ? root.path : root.mode === "search" ? root.searchRoot : root.mode + ":"
     property alias model: entries
     property var all: []
+    property var rawAll: []
+    property string filterText: ""
     property var at: ({})
     property bool loading: false
     property string error: ""
@@ -103,6 +105,7 @@ Item {
             root.path = target
         }
         root.query = ""
+        root.filterText = ""
         root.clearSel()
         root.current = -1
         root.anchor = -1
@@ -186,11 +189,13 @@ Item {
         root.remote = r.remote ?? false
         let list = root.rows(r.entries)
         if (root.mode !== "folder" && !root.showHidden) list = list.filter(e => !e.hidden || root.mode === "trash")
+        root.rawAll = list
+        if (root.mode !== "search" && root.mode !== "start" && root.filterText.trim().length > 0) list = root.filterList(list, root.filterText)
         if (keep) root.merge(list)
         else {
             root.all = list
             entries.clear()
-            entries.append(list)
+            for (let k = 0; k < list.length; k++) entries.append(list[k])
             root.reindex()
             root.reset()
         }
@@ -292,6 +297,33 @@ Item {
             if (b.error) Toast.fail(Errors.text(b.error))
         }
         function onReadyChanged() { if (Core.ready && root.error === "core") root.load(false) }
+    }
+
+    // ---- instant in-folder fuzzy filter (zero disk I/O)
+    function foldStr(s: string): string { return (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase() }
+    function matchesFilter(name: string, q: string): bool {
+        const a = root.foldStr(name)
+        if (a.indexOf(q) >= 0) return true
+        let qi = 0
+        for (let i = 0; i < a.length && qi < q.length; i++) if (a[i] === q[qi]) qi++
+        return qi === q.length
+    }
+    function filterList(list: var, text: string): var {
+        const q = root.foldStr(text.trim())
+        if (q.length === 0) return list
+        return list.filter(e => root.matchesFilter(e.name, q))
+    }
+    onFilterTextChanged: {
+        if (root.mode === "search" || root.mode === "start") return
+        const next = root.filterList(root.rawAll, root.filterText)
+        root.all = next
+        entries.clear()
+        for (let k = 0; k < next.length; k++) entries.append(next[k])
+        root.reindex()
+        root.clearSel()
+        root.current = next.length > 0 && root.filterText.trim().length > 0 ? 0 : -1
+        root.reset()
+        root.applied()
     }
 
     // ---- search below the folder on screen

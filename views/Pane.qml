@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import qs.services
 import qs.kit
 
@@ -11,6 +12,29 @@ FocusScope {
     property alias folder: folder
     readonly property bool active: root.browser.activePane === root
     property string viewMode: Prefs.get("view")
+    property bool filterOpen: false
+    function openFilter(): void {
+        if (folder.mode === "start" || folder.mode === "search") return
+        root.filterOpen = true
+        Qt.callLater(() => { if (filterLoader.item) filterLoader.item.focusInput() })
+    }
+    function closeFilter(): void {
+        root.filterOpen = false
+        folder.filterText = ""
+        root.forceActiveFocus()
+    }
+    function setViewMode(mode: string): void {
+        root.viewMode = mode
+        Prefs.set("view", mode)
+        if (folder.mode === "folder" && folder.path.length > 0) {
+            const mem = Object.assign({}, Prefs.recall("folderViews", {}))
+            delete mem[folder.path]
+            mem[folder.path] = mode
+            const keys = Object.keys(mem)
+            if (keys.length > 200) delete mem[keys[0]]
+            Prefs.remember("folderViews", mem)
+        }
+    }
     // Each pane holds its own zoom (seeded from Prefs on creation) so Ctrl+Scroll never re-layouts other windows or hidden tabs.
     property int zoom: 3
     property int listZoom: 1
@@ -57,6 +81,11 @@ FocusScope {
         onPlaceChanged: {
             if (root.view && root.shownPlace.length > 0) root.memo[root.shownPlace] = root.view.contentY
             root.shownPlace = folder.place
+            root.filterOpen = false
+            if (folder.mode === "folder") {
+                const mem = Prefs.recall("folderViews", {})
+                root.viewMode = mem[folder.path] ?? Prefs.get("view")
+            }
         }
         onReset: {
             // A new place arrives with a short fade, so the eye reads the swap as one step. Columns keep the columns
@@ -191,7 +220,8 @@ FocusScope {
             return
         }
         if (k === Qt.Key_Escape) {
-            if (f.mode === "search") root.browser.head.clearSearch()
+            if (root.filterOpen || f.filterText.length > 0) root.closeFilter()
+            else if (f.mode === "search") root.browser.head.clearSearch()
             else if (f.selCount > 0) f.clearSel()
             event.accepted = true
             return
@@ -290,6 +320,7 @@ FocusScope {
         if (f.mode === "start") return ""
         if (f.error.length > 0) return "error"
         if (f.loading || f.model.count > 0) return ""
+        if (f.mode !== "search" && f.filterText.trim().length > 0) return "infilter"
         if (f.mode === "search") return f.searching ? "searching" : f.found.length > 0 ? "filtered" : (f.query.length > 0 ? "nothing" : "")
         return f.mode
     }
@@ -312,7 +343,7 @@ FocusScope {
                 Glyph {
                     anchors.centerIn: parent
                     visible: root.blank !== "searching"
-                    name: ({ error: folder.error === "denied" ? "lock" : "error", searching: "search", nothing: "search_off", filtered: "filter_alt_off", trash: "delete", recent: "schedule", folder: "folder_open" })[root.blank] ?? "folder_open"
+                    name: ({ error: folder.error === "denied" ? "lock" : "error", searching: "search", nothing: "search_off", filtered: "filter_alt_off", infilter: "filter_list_off", trash: "delete", recent: "schedule", folder: "folder_open" })[root.blank] ?? "folder_open"
                     size: Theme.dp(34)
                     color: Theme.ink3
                 }
@@ -336,6 +367,7 @@ FocusScope {
                     case "error": return folder.error === "denied" ? I18n.tr("No permission to open this folder") : folder.error === "missing" ? I18n.tr("This folder no longer exists") : I18n.tr("This place could not be read")
                     case "searching": return I18n.tr("Searching")
                     case "nothing": return I18n.tr("Nothing matches “%1”", folder.query)
+                    case "infilter": return I18n.tr("Nothing matches “%1”", folder.filterText.trim())
                     case "filtered": return I18n.tr("Nothing of this kind")
                     case "trash": return I18n.tr("The trash is empty")
                     case "recent": return I18n.tr("No recent files")
@@ -353,6 +385,7 @@ FocusScope {
                     case "error": return folder.error === "denied" || folder.error === "missing" ? Fmt.pretty(folder.path) : Errors.text(folder.error)
                     case "searching": return I18n.tr("%1 items checked", Fmt.num(folder.scanned, 0))
                     case "nothing": return folder.content ? I18n.tr("No file below %1 holds this text.", Fmt.pretty(folder.searchRoot)) : I18n.tr("No name below %1 holds these words. Try the text inside files.", Fmt.pretty(folder.searchRoot))
+                    case "infilter": return I18n.n("%1 item hidden by filter.", "%1 items hidden by filter.", folder.rawAll.length)
                     case "filtered": return I18n.n("%1 result of another kind.", "%1 results of other kinds.", folder.found.length)
                     case "trash": return I18n.tr("What you delete waits here until you empty it.")
                     case "recent": return I18n.tr("Files you open in your apps show up here.")
@@ -389,10 +422,105 @@ FocusScope {
                     onClicked: folder.filterKind("")
                 }
                 Pill {
+                    visible: root.blank === "infilter"
+                    text: I18n.tr("Clear filter")
+                    glyph: "filter_list_off"
+                    onClicked: root.closeFilter()
+                }
+                Pill {
                     visible: root.blank === "error" && folder.error === "missing"
                     text: I18n.tr("Go up")
                     glyph: "arrow_upward"
                     onClicked: folder.goUp()
+                }
+            }
+        }
+    }
+
+    // Floating instant in-folder filter bar (Ctrl+/), built only while open.
+    Loader {
+        id: filterLoader
+        active: root.filterOpen
+        z: 10
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Theme.dp(14)
+        sourceComponent: Item {
+            id: fBar
+            width: Math.min(root.width - Theme.dp(32), Theme.dp(340))
+            height: Theme.dp(40)
+            function focusInput(): void { fInput.forceActiveFocus(); fInput.selectAll() }
+            RectangularShadow {
+                anchors.fill: fPlate
+                radius: fPlate.radius
+                blur: Theme.dp(20)
+                offset.y: Theme.dp(6)
+                color: Theme.shadow
+            }
+            Rectangle {
+                id: fPlate
+                anchors.fill: parent
+                radius: height / 2
+                color: Theme.raised
+                border.width: 1
+                border.color: Theme.line
+                Glyph {
+                    id: fGlyph
+                    x: Theme.dp(14)
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "filter_list"
+                    size: Theme.dp(17)
+                    color: Theme.accentInk
+                }
+                TextInput {
+                    id: fInput
+                    anchors.left: fGlyph.right
+                    anchors.leftMargin: Theme.dp(8)
+                    anchors.right: fCount.left
+                    anchors.rightMargin: Theme.dp(8)
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: Theme.ink
+                    selectionColor: Theme.alpha(Theme.accent, 0.45)
+                    selectedTextColor: Theme.ink
+                    font.family: Theme.sans
+                    font.pixelSize: Theme.row
+                    renderType: TextInput.NativeRendering
+                    selectByMouse: true
+                    text: folder.filterText
+                    onTextChanged: folder.filterText = text
+                    Keys.onEscapePressed: root.closeFilter()
+                    Keys.onReturnPressed: { root.forceActiveFocus(); if (folder.model.count > 0) folder.only(0) }
+                    Keys.onEnterPressed: { root.forceActiveFocus(); if (folder.model.count > 0) folder.only(0) }
+                    Keys.onDownPressed: { root.forceActiveFocus(); if (folder.model.count > 0) folder.only(0) }
+                    Txt {
+                        visible: fInput.text.length === 0
+                        x: Theme.dp(2)
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: I18n.tr("Filter this folder…")
+                        size: Theme.small
+                        color: Theme.ink3
+                    }
+                }
+                Txt {
+                    id: fCount
+                    anchors.right: fClose.left
+                    anchors.rightMargin: Theme.dp(6)
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: folder.filterText.trim().length > 0 ? (folder.all.length + "/" + folder.rawAll.length) : ""
+                    size: Theme.caption
+                    color: Theme.ink3
+                    font.features: { "tnum": 1 }
+                }
+                Act {
+                    id: fClose
+                    anchors.right: parent.right
+                    anchors.rightMargin: Theme.dp(6)
+                    anchors.verticalCenter: parent.verticalCenter
+                    size: Theme.dp(26)
+                    glyphSize: Theme.dp(15)
+                    glyph: "close"
+                    tip: I18n.tr("Clear filter")
+                    onClicked: root.closeFilter()
                 }
             }
         }

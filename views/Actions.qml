@@ -344,9 +344,13 @@ Item {
         if (root.connecting) root.connecting.dismissed.connect(() => root.connecting = null)
     }
     function selectByName(pane: var): void { if (pane) root.sheet(selectSheet, { pane: pane }) }
+    function analyzeSpace(pane: var): void { if (pane) root.sheet(spaceSheet, { pane: pane, startPath: root.here(pane) || Core.home }) }
 
     // ---- how the files show
-    function setView(value: string): void { Prefs.set("view", value) }
+    function setView(value: string): void {
+        if (root.browser.activePane) root.browser.activePane.setViewMode(value)
+        else Prefs.set("view", value)
+    }
     function sortBy(key: string): void {
         if (Prefs.get("sort") === key) Prefs.set("desc", !Prefs.get("desc"))
         else { Prefs.set("sort", key); Prefs.set("desc", key === "mtime" || key === "size") }
@@ -398,6 +402,8 @@ Item {
             { text: I18n.tr("New window"), glyph: "open_in_new", keys: "Ctrl+N", run: () => root.browser.newWindow(pane.folder.place) },
             { text: I18n.tr("Reopen closed tab"), glyph: "restore_page", keys: "Ctrl+Shift+T", enabled: root.browser.closedTabs.length > 0, run: () => root.browser.reopenTab() },
             { text: I18n.tr("Split view"), glyph: "vertical_split", keys: "F3", checked: page ? page.split : false, run: () => page && page.toggleSplit() },
+            { text: I18n.tr("Analyze disk space"), glyph: "donut_large", keys: "Ctrl+Shift+U", enabled: root.here(pane).length > 0, run: () => root.analyzeSpace(pane) },
+            { text: I18n.tr("Command palette"), glyph: "bolt", keys: "Ctrl+K", run: () => root.browser.palette.open("") },
             { text: I18n.tr("Connect to server…"), glyph: "add_link", run: () => root.connect("", false) },
             { separator: true },
             { text: I18n.tr("Show hidden files"), glyph: "visibility", keys: "Ctrl+H", checked: Prefs.get("hidden") === true, run: () => Prefs.set("hidden", !Prefs.get("hidden")) },
@@ -557,6 +563,7 @@ Item {
     Component { id: compressSheet; CompressSheet { ops: root } }
     Component { id: passwordSheet; PasswordSheet { ops: root } }
     Component { id: selectSheet; SelectSheet {} }
+    Component { id: spaceSheet; SpaceSheet {} }
     Component { id: connectSheet; ConnectSheet { ops: root } }
     Component { id: settingsSheet; SettingsSheet {} }
 }

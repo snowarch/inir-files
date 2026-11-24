@@ -48,7 +48,8 @@ FloatingWindow {
     readonly property alias tips: tipHost
     readonly property alias head: headItem
     readonly property alias quickLook: look
-    readonly property bool busy: sheets.children.length > 0 || menuHost.visible || look.shown
+    readonly property alias palette: paletteItem
+    readonly property bool busy: sheets.children.length > 0 || menuHost.visible || look.shown || paletteItem.shown
     readonly property bool keysFree: !root.busy && root.renaming.length === 0
     // A narrow window lays the places over the panes on demand, and keeps the preview for a window with room for it.
     readonly property bool narrow: stageItem.width < Theme.dp(800)
@@ -168,7 +169,15 @@ FloatingWindow {
     }
     Connections {
         target: root.activePane ? root.activePane.folder : null
-        function onPlaceChanged() { saveTabs.restart(); root.railOpen = false }
+        function onPlaceChanged() {
+            saveTabs.restart()
+            root.railOpen = false
+            const f = root.activePane?.folder
+            if (f && f.mode === "folder" && f.path.length > 0) {
+                const prev = Prefs.recall("visited", []).filter(p => p !== f.path)
+                Prefs.remember("visited", [f.path].concat(prev).slice(0, 30))
+            }
+        }
     }
 
     // ---- the window itself
@@ -316,6 +325,7 @@ FloatingWindow {
             z: 700
         }
         QuickLook { id: look; browser: root }
+        CommandPalette { id: paletteItem; browser: root }
         Item { id: sheets; anchors.fill: parent; z: 800 }
         MenuHost { id: menuHost }
         TipHost { id: tipHost; anchors.fill: parent; z: 950 }
@@ -389,6 +399,9 @@ FloatingWindow {
             onActivated: { if (index === 8) root.tabIndex = root.tabs.length - 1; else if (index < root.tabs.length) root.tabIndex = index }
         }
     }
+    Key { sequence: "Ctrl+/"; onActivated: if (root.pane) root.pane.openFilter() }
+    Key { sequences: ["Ctrl+K", "Ctrl+P"]; always: true; onActivated: paletteItem.open("") }
+    Key { sequence: "Ctrl+Shift+U"; always: true; onActivated: root.actions.analyzeSpace(root.pane) }
     Key { sequence: "Ctrl+,"; always: true; onActivated: root.actions.settings() }
     Key { sequence: "Ctrl+Q"; always: true; onActivated: root.closeWindow() }
 }
