@@ -26,6 +26,8 @@ Sheet {
         if (root.one) Core.call("info", { path: root.paths[0] }, r => { if (r.ok) root.info = r })
         Core.call("stat", { paths: root.paths }, r => {
             if (!r.ok) return
+            // Nothing left to tell of (gone since it was asked for, as a stale "Show in folder" can be).
+            if (r.entries.length === 0) { Toast.fail(Errors.text("missing")); root.close(); return }
             root.entries = r.entries
             if (r.entries.some(e => e.dir)) {
                 root.sizeToken = "props-" + Date.now()

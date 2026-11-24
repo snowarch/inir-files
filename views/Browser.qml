@@ -9,6 +9,9 @@ FloatingWindow {
     id: root
     property string startPath: ""
     property bool restoreTabs: false
+    // The entries to choose in the first tab, and their properties shown at once.
+    property var startChosen: []
+    property bool startProps: false
     signal newWindowRequested(string path)
     signal closeRequested()
 
@@ -60,8 +63,8 @@ FloatingWindow {
     }
 
     // ---- tabs
-    function newTab(path: string): void {
-        const page = pageComponent.createObject(pages, { browser: root, startPath: path && path.length > 0 ? path : Core.home })
+    function newTab(path: string, chosen: var): void {
+        const page = pageComponent.createObject(pages, { browser: root, startPath: path && path.length > 0 ? path : Core.home, startChosen: chosen ?? [] })
         page.anchors.fill = pages
         page.visible = Qt.binding(() => root.currentPage === page)
         root.tabs = root.tabs.concat([page])
@@ -146,7 +149,8 @@ FloatingWindow {
         if (saved && saved.paths && saved.paths.length > 0) {
             for (const p of saved.paths) root.newTab(p)
             root.tabIndex = Math.max(0, Math.min(saved.index ?? 0, root.tabs.length - 1))
-        } else root.newTab(root.startPath)
+        } else root.newTab(root.startPath, root.startChosen)
+        if (root.startProps && root.startChosen.length > 0) Qt.callLater(root.actions.propertiesOf, root.startChosen)
     }
 
     Component { id: pageComponent; TabPage {} }

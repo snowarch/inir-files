@@ -4,6 +4,7 @@
 // ({"event": "thumb", ...}). The process ends when the interface closes stdin, after the jobs at work have finished.
 
 mod apps;
+mod fm1;
 mod info;
 mod jobs;
 mod list;
@@ -216,6 +217,7 @@ fn main() {
     thumbs::start(ctx.clone());
     watch::start(ctx.clone());
     ctx.out.event("ready", json!({"version": env!("CARGO_PKG_VERSION"), "pid": std::process::id(), "home": util::home().to_string_lossy()}));
+    fm1::start(ctx.clone());
     for line in std::io::stdin().lock().lines() {
         let Ok(line) = line else { break };
         if line.trim().is_empty() {

@@ -21,6 +21,8 @@ Item {
     property bool remote: false
     property int loadSerial: 0
     property string focusPath: ""
+    // The entries to choose once the folder is read.
+    property var choose: []
     property bool selectFirst: false
 
     property string sortKey: Prefs.get("sort")
@@ -160,6 +162,12 @@ Item {
                 root.enter(Fmt.parent(root.path))
                 return
             }
+            // A file asked for as a place shows chosen in its folder.
+            if (r.error === "notdir" && root.mode === "folder") {
+                root.choose = [root.path]
+                root.enter(Fmt.parent(root.path))
+                return
+            }
             root.error = r.error
             root.all = []
             entries.clear()
@@ -191,7 +199,11 @@ Item {
             else n++
         }
         root.selCount = n
-        if (root.focusPath.length > 0) {
+        if (root.choose.length > 0) {
+            const want = root.choose
+            root.choose = []
+            root.selectByPaths(want)
+        } else if (root.focusPath.length > 0) {
             const i = root.indexOf(root.focusPath)
             root.focusPath = ""
             if (i >= 0) root.only(i)

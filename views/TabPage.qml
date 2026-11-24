@@ -7,6 +7,7 @@ Item {
     id: root
     required property var browser
     property string startPath: Core.home
+    property var startChosen: []
     property bool split: false
     property real ratio: 0.5
     property var activePane: first
@@ -43,7 +44,10 @@ Item {
         }
     }
     function otherPane(pane: var): var { return root.split ? (pane === first ? second : first) : null }
-    Component.onCompleted: first.folder.go(root.startPath, false)
+    Component.onCompleted: {
+        first.folder.choose = root.startChosen
+        first.folder.go(root.startPath, false)
+    }
 
     component Strip: Rectangle {
         id: strip
