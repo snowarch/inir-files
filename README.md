@@ -5,38 +5,48 @@ The file manager of the iNiR desktop. The interface is QML on qs-rs, the iNiR ru
 
 ## What it does
 
-- Grid, list and columns views, tabs, a split view and windows that share one process.
+- Start page (greeting over the wallpaper, places, bookmarks, recent files and drives), plus grid, list, columns and
+  gallery views, tabs, a split view and windows that share one process.
 - A side panel and a full-window quick look (Space) that show what a file holds: pictures at full size, films and
   songs that play, every page of a PDF, Markdown as a page, code in its language's colours, fonts, archive contents.
 - Facts in place: picture size and camera data, film and sound streams with HDR10, HLG and Dolby Vision, PDF pages
   and author, folder sizes, checksums.
-- Copy, move, link, duplicate, trash and restore as jobs with progress, conflict choices and undo.
-- Rename one or many (find and replace, numbers, case), new files from templates, compress (zip, tar.zst, 7z, with a
-  password) and extract.
-- Places, bookmarks, recent files, the trash and every disk, with mount, unmount and eject.
+- Copy, move, link, duplicate, trash and restore as jobs with progress, conflict choices and undo/redo.
+- Rename one or many (find and replace, numbers, case), select by name, new files from templates, compress (zip,
+  tar.zst, 7z, with a password) and extract.
+- Places, bookmarks, recent files, the trash, every disk (mount, unmount, eject) and remote servers over GVfs (SFTP,
+  SMB, FTP, WebDAV, NFS).
+- Serves `org.freedesktop.FileManager1` on D-Bus so browsers and other apps open "Show in folder" directly in it.
 - Search by name, or inside files with ripgrep.
 - Open with any app, set the default app of a kind, a terminal here, paste an image or text as a file.
 - Set a picture or a film as the iNiR wallpaper.
 - Colours, accent and fonts follow iNiR, in light and dark.
 
-## Run it
+## Build and install
+
+Build and run from a checkout:
 
 ```sh
-cargo build --release --manifest-path core/Cargo.toml
+make build
 bin/inir-files [PATH]...
 ```
 
-To keep it on your desktop, with an entry in the app launcher:
+Install into `~/.local` (no root required) or `/usr/local`:
 
 ```sh
-ln -s "$PWD/bin/inir-files" ~/.local/bin/inir-files
-install -Dm644 data/inir-files.desktop ~/.local/share/applications/inir-files.desktop
+make install PREFIX="$HOME/.local"
 xdg-mime default inir-files.desktop inode/directory   # optional: folders open in it
 ```
 
-`bin/inir-files` finds the runtime at `~/.local/share/inir/runtime/current/bin/qs` or as `qs` on the `PATH`
+`make install` places the launcher in `$(PREFIX)/bin/inir-files`, the Rust engine in `$(PREFIX)/libexec/inir-files-core`,
+the QML files in `$(PREFIX)/share/inir-files/`, the desktop entry in `$(PREFIX)/share/applications/`, and the D-Bus
+activation service in `$(PREFIX)/share/dbus-1/services/inir-files.FileManager1.service` with `Exec=` pointing at the
+installed launcher. Standard `DESTDIR` is supported for packaging.
+
+`make dist` builds a self-contained release tarball and SHA-256 checksum under `dist/`.
+
+`bin/inir-files` requires `qs-rs` (the iNiR runtime) at `~/.local/share/inir/runtime/current/bin/qs` or on `PATH`
 (`INIR_FILES_QS` names another). A running instance opens each path in a new window.
-`data/inir-files.desktop` makes it the app for folders.
 
 ## What it uses when present
 

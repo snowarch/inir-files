@@ -3,7 +3,14 @@
 set -euo pipefail
 
 here=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
-shell="$here/shell.qml"
+if [ -f "$here/shell.qml" ]; then
+    shell="$here/shell.qml"
+elif [ -f "$here/share/inir-files/shell.qml" ]; then
+    shell="$here/share/inir-files/shell.qml"
+else
+    echo "inir-files: shell.qml not found under $here" >&2
+    exit 1
+fi
 
 # The app runs on qs-rs, the iNiR runtime: a stock Quickshell lacks what it uses.
 qsrs() { [ -x "$1" ] && case $("$1" --version 2>/dev/null) in *qs-rs*) true ;; *) false ;; esac; }
@@ -17,10 +24,18 @@ else
 fi
 [ -n "$qs" ] || { echo "inir-files: needs qs-rs, the iNiR runtime; install iNiR or set INIR_FILES_QS" >&2; exit 1; }
 export INIR_FILES_QS=$qs   # the core calls the iNiR shell with the same runtime
-if [ -z "${INIR_FILES_CORE:-}" ] && [ ! -x "$here/core/target/release/inir-files-core" ]; then
-    echo "inir-files: build the core first: cargo build --release --manifest-path $here/core/Cargo.toml" >&2
+
+core=${INIR_FILES_CORE:-}
+if [ -z "$core" ]; then
+    for c in "$here/libexec/inir-files-core" "$here/lib/inir-files/inir-files-core" "$here/core/target/release/inir-files-core"; do
+        if [ -x "$c" ]; then core=$c; break; fi
+    done
+fi
+if [ -z "$core" ] || [ ! -x "$core" ]; then
+    echo "inir-files: core binary not found; build it with: cargo build --release --manifest-path $here/core/Cargo.toml" >&2
     exit 1
 fi
+export INIR_FILES_CORE=$core
 
 # D-Bus starts the app for org.freedesktop.FileManager1 ("inir-files --service"): it stays in the foreground, as the
 # bus wants, and the call that woke it opens the window. A running instance already serves the name.

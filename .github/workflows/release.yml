@@ -1,0 +1,57 @@
+name: release
+
+# Builds and tests inir-files-core on x86_64 and aarch64, packages each release tarball with the QML app, launcher,
+# desktop entry and D-Bus service, and publishes them on v* tags.
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - { arch: x86_64, os: ubuntu-24.04 }
+          - { arch: aarch64, os: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: cargo test --locked --manifest-path core/Cargo.toml
+      - name: package
+        run: |
+          ver=$(sed -n 's/^version = "\(.*\)"/\1/p' core/Cargo.toml | head -n 1)
+          if [[ $GITHUB_REF == refs/tags/* && ${GITHUB_REF_NAME#v} != "$ver" ]]; then
+            echo "tag $GITHUB_REF_NAME but core/Cargo.toml says $ver"; exit 1
+          fi
+          make dist ARCH=${{ matrix.arch }} DIST=out
+      - uses: actions/upload-artifact@v7
+        with:
+          name: inir-files-${{ matrix.arch }}
+          retention-days: 30
+          path: |
+            out/*.tar.gz
+            out/*.sha256
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: inir-files-*
+          path: out
+          merge-multiple: true
+      - run: gh release create "$GITHUB_REF_NAME" out/*.tar.gz out/*.sha256 --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
