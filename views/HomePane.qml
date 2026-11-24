@@ -1,11 +1,11 @@
 import QtQuick
 import QtQuick.Controls.Basic as QQC
-import QtQuick.Effects
 import Quickshell
 import qs.services
 import qs.kit
 
-// The start page: a greeting over the desktop's wallpaper, the person's folders and bookmarks, recent files and drives.
+// The start page: restrained, system-focused and customizable. No redundant card soup — clean tonal surfaces,
+// crisp instant hover, and live section toggles from the top-right customize control.
 Item {
     id: root
     required property var pane
@@ -14,7 +14,6 @@ Item {
     readonly property Item view: flick
     readonly property bool sideways: false
 
-    // Interface contract with Pane.qml (scrolling on PageUp/PageDown/arrows; no row selection here).
     function reveal(i: int): void {}
     function step(i: int, key: int): int {
         const delta = key === Qt.Key_PageDown ? flick.height * 0.85 : key === Qt.Key_PageUp ? -flick.height * 0.85 : key === Qt.Key_Down ? Theme.dp(72) : key === Qt.Key_Up ? -Theme.dp(72) : 0
@@ -22,14 +21,38 @@ Item {
         return -1
     }
 
-    property int hour: new Date().getHours()
-    property string todayText: root.formatToday()
-    onVisibleChanged: if (visible) { root.hour = new Date().getHours(); root.todayText = root.formatToday() }
-
-    function formatToday(): string {
-        const s = new Date().toLocaleDateString(Fmt.loc, Locale.LongFormat)
-        return s.length > 0 ? s[0].toUpperCase() + s.slice(1) : s
+    // ---- live section customization
+    readonly property var sections: Object.assign({ banner: true, places: true, drives: true, recent: true, bookmarks: false }, Prefs.get("startSections") ?? {})
+    function toggleSection(key: string): void {
+        const next = Object.assign({}, root.sections)
+        next[key] = !next[key]
+        Prefs.set("startSections", next)
     }
+    function customizeEntries(): var {
+        const s = root.sections
+        const item = (key, text, glyph) => ({
+            text: text, glyph: glyph, checked: s[key] === true, keep: true,
+            run: () => { root.toggleSection(key); root.browser.menus.refresh(root.customizeEntries()) }
+        })
+        return [
+            { header: I18n.tr("Sections") },
+            item("banner", I18n.tr("Wallpaper header"), "wallpaper"),
+            item("places", I18n.tr("System folders"), "folder"),
+            item("drives", I18n.tr("Storage"), "hard_drive"),
+            item("recent", I18n.tr("Recent files"), "schedule"),
+            item("bookmarks", I18n.tr("Bookmarks"), "bookmark"),
+            { separator: true },
+            {
+                text: I18n.tr("Open new windows on Start"), glyph: "space_dashboard",
+                checked: Prefs.get("start") === true, keep: true,
+                run: () => { Prefs.set("start", !Prefs.get("start")); root.browser.menus.refresh(root.customizeEntries()) }
+            }
+        ]
+    }
+
+    property int hour: new Date().getHours()
+    onVisibleChanged: if (visible) root.hour = new Date().getHours()
+
     readonly property string greeting: {
         const who = Core.places.user ?? ""
         if (root.hour >= 5 && root.hour < 12) return who.length > 0 ? I18n.tr("Good morning, %1", who) : I18n.tr("Good morning")
@@ -37,6 +60,7 @@ Item {
         return who.length > 0 ? I18n.tr("Good evening, %1", who) : I18n.tr("Good evening")
     }
     readonly property string wallSource: {
+        if (!root.sections.banner) return ""
         const w = Theme.wallpaper
         if (!w || w.length === 0 || /\.(mp4|webm|mkv|mov|avi|m4v)$/i.test(w)) return ""
         return Fmt.url(w)
@@ -63,7 +87,7 @@ Item {
     }))
     readonly property var recents: {
         void root.folder.selRev
-        return root.folder.all.slice(0, 8)
+        return root.folder.all.slice(0, 6)
     }
     readonly property var drives: {
         const out = []
@@ -91,6 +115,13 @@ Item {
         }
         return out
     }
+    readonly property string systemSummary: {
+        const parts = []
+        if (Core.places.host) parts.push(Core.places.host)
+        const rootDisk = (Core.places.devices ?? []).find(d => d.root)
+        if (rootDisk && rootDisk.size > 0) parts.push(I18n.tr("%1 free", Fmt.size(rootDisk.free)))
+        return parts.join(" · ")
+    }
 
     function openDrive(d: var, newTab: bool): void {
         if (d.kind === "device" && !d.mounted) {
@@ -117,204 +148,137 @@ Item {
         id: flick
         anchors.fill: parent
         contentWidth: width
-        contentHeight: col.implicitHeight + Theme.dp(44)
+        contentHeight: Math.max(height, col.y + col.implicitHeight + Theme.dp(40))
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         QQC.ScrollBar.vertical: Scroller {}
 
-        // A click on empty ground focuses the pane without disturbing anything.
         MouseArea {
             width: flick.width
-            height: Math.max(flick.height, flick.contentHeight)
+            height: flick.contentHeight
             onPressed: root.pane.activate()
+        }
+
+        // ---- atmospheric wallpaper backdrop melting seamlessly into Theme.canvas (no harsh boxed frame)
+        Item {
+            id: wallBand
+            visible: root.sections.banner && wallImg.status === Image.Ready
+            width: flick.width
+            height: Theme.dp(156)
+            clip: true
+
+            Image {
+                id: wallImg
+                anchors.fill: parent
+                source: root.wallSource
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+                smooth: true
+                sourceSize.width: Math.max(1, Math.round(flick.width * root.dpr))
+                opacity: status === Image.Ready ? (Theme.light ? 0.34 : 0.42) : 0
+                Behavior on opacity { NumberAnimation { duration: Theme.normal } }
+            }
+            // Soft fade into Theme.canvas along the bottom so the wallpaper belongs to the surface.
+            Rectangle {
+                anchors.fill: parent
+                gradient: Gradient {
+                    GradientStop { position: 0; color: Theme.alpha(Theme.canvas, Theme.light ? 0.25 : 0.2) }
+                    GradientStop { position: 0.62; color: Theme.alpha(Theme.canvas, Theme.light ? 0.72 : 0.65) }
+                    GradientStop { position: 1; color: Theme.canvas }
+                }
+            }
         }
 
         Column {
             id: col
-            readonly property real pad: flick.width < Theme.dp(560) ? Theme.dp(16) : Theme.dp(28)
-            width: Math.min(flick.width - pad * 2, Theme.dp(920))
+            readonly property real pad: flick.width < Theme.dp(560) ? Theme.dp(18) : Theme.dp(32)
+            width: Math.min(flick.width - pad * 2, Theme.dp(820))
             anchors.horizontalCenter: parent.horizontalCenter
-            y: Theme.dp(20)
-            spacing: Theme.dp(22)
+            y: wallBand.visible ? Theme.dp(34) : Theme.dp(24)
+            spacing: Theme.dp(26)
 
-            // ---- hero: greeting over the desktop's wallpaper
+            // ---- header: clean greeting + system summary + customize button
             Item {
-                id: hero
                 width: col.width
-                height: flick.width < Theme.dp(560) ? Theme.dp(128) : Theme.dp(152)
-                readonly property bool hasWall: wallImg.status === Image.Ready
-
-                Rectangle {
-                    id: heroMask
-                    anchors.fill: parent
-                    radius: Theme.cardRadius
-                    visible: false
-                    layer.enabled: true
-                }
-
-                Item {
-                    anchors.fill: parent
-                    layer.enabled: Theme.cardRadius > 0
-                    layer.effect: MultiEffect {
-                        maskEnabled: true
-                        maskSource: heroMask
-                        maskThresholdMin: 0.5
-                        maskSpreadAtMin: 1.0
-                    }
-
-                    // Fallback surface when no wallpaper is available.
-                    Rectangle {
-                        anchors.fill: parent
-                        gradient: Gradient {
-                            orientation: Gradient.Horizontal
-                            GradientStop { position: 0; color: Theme.mix(Theme.card, Theme.accent, Theme.light ? 0.16 : 0.22) }
-                            GradientStop { position: 1; color: Theme.card }
-                        }
-                    }
-
-                    Image {
-                        id: wallImg
-                        anchors.fill: parent
-                        source: root.wallSource
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        smooth: true
-                        // Width alone keeps the wallpaper sharp when PreserveAspectCrop zooms a tall picture to fill the banner.
-                        sourceSize.width: Math.max(1, Math.round(hero.width * root.dpr))
-                        opacity: status === Image.Ready ? 1 : 0
-                        Behavior on opacity { NumberAnimation { duration: Theme.normal } }
-                    }
-
-                    // Contrast scrim so text reads cleanly over any wallpaper.
-                    Rectangle {
-                        anchors.fill: parent
-                        visible: hero.hasWall
-                        gradient: Gradient {
-                            GradientStop { position: 0; color: Qt.rgba(0.03, 0.04, 0.06, 0.24) }
-                            GradientStop { position: 0.55; color: Qt.rgba(0.03, 0.04, 0.06, 0.44) }
-                            GradientStop { position: 1; color: Qt.rgba(0.03, 0.04, 0.06, 0.72) }
-                        }
-                    }
-                }
-
-                // Subtle frame edge on top.
-                Rectangle {
-                    anchors.fill: parent
-                    radius: Theme.cardRadius
-                    color: "transparent"
-                    border.width: 1
-                    border.color: hero.hasWall ? Qt.rgba(1, 1, 1, 0.14) : Theme.line
-                }
+                height: headCol.implicitHeight
 
                 Column {
+                    id: headCol
                     anchors.left: parent.left
-                    anchors.leftMargin: Theme.dp(24)
-                    anchors.right: searchPill.visible ? searchPill.left : parent.right
-                    anchors.rightMargin: Theme.dp(20)
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: Theme.dp(20)
-                    spacing: Theme.dp(4)
-
+                    anchors.right: tuneAct.left
+                    anchors.rightMargin: Theme.dp(12)
+                    spacing: Theme.dp(3)
                     Txt {
                         width: parent.width
                         text: root.greeting
                         font.family: Theme.title
                         size: flick.width < Theme.dp(560) ? Theme.titleSize : Theme.display
                         strong: true
-                        color: hero.hasWall ? "#ffffff" : Theme.ink
+                        color: Theme.ink
                     }
                     Txt {
                         width: parent.width
-                        text: Core.places.host ? root.todayText + " · " + Core.places.host : root.todayText
-                        size: Theme.body
-                        color: hero.hasWall ? Qt.rgba(1, 1, 1, 0.84) : Theme.ink2
+                        visible: text.length > 0
+                        text: root.systemSummary
+                        size: Theme.small
+                        color: Theme.ink2
                     }
                 }
-
-                // Quick search button on the hero when there is room.
-                Rectangle {
-                    id: searchPill
-                    visible: hero.width >= Theme.dp(580)
+                Act {
+                    id: tuneAct
                     anchors.right: parent.right
-                    anchors.rightMargin: Theme.dp(20)
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: Theme.dp(20)
-                    height: Theme.dp(36)
-                    width: searchRow.implicitWidth + Theme.dp(24)
-                    radius: height / 2
-                    color: hero.hasWall
-                        ? (searchHit.pressed ? Qt.rgba(0, 0, 0, 0.56) : searchHit.containsMouse ? Qt.rgba(0, 0, 0, 0.46) : Qt.rgba(0, 0, 0, 0.36))
-                        : (searchHit.pressed ? Theme.fillPress : searchHit.containsMouse ? Theme.fillHover : Theme.fill)
-                    border.width: 1
-                    border.color: hero.hasWall ? Qt.rgba(1, 1, 1, 0.22) : Theme.line
-                    Row {
-                        id: searchRow
-                        anchors.centerIn: parent
-                        spacing: Theme.dp(8)
-                        Glyph { anchors.verticalCenter: parent.verticalCenter; name: "search"; size: Theme.dp(17); color: hero.hasWall ? "#ffffff" : Theme.ink2 }
-                        Txt { anchors.verticalCenter: parent.verticalCenter; text: I18n.tr("Search files"); size: Theme.small; strong: true; color: hero.hasWall ? "#ffffff" : Theme.ink }
-                    }
-                    MouseArea {
-                        id: searchHit
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.browser.head.focusSearch()
-                    }
+                    anchors.verticalCenter: headCol.verticalCenter
+                    glyph: "tune"
+                    tip: I18n.tr("Customize start page")
+                    onClicked: root.browser.menus.openAt(root.customizeEntries(), tuneAct, true)
                 }
             }
 
-            // ---- places
+            // ---- system folders (compact tonal strip, zero noisy borders, crisp instant hover)
             Column {
                 width: col.width
                 spacing: Theme.dp(10)
-                Caption { text: I18n.tr("Places") }
+                visible: root.sections.places && root.quickPlaces.length > 0
+                Caption { text: I18n.tr("System folders") }
 
                 Grid {
                     id: placesGrid
                     width: parent.width
-                    columns: col.width >= Theme.dp(680) ? 4 : col.width >= Theme.dp(440) ? 3 : 2
-                    columnSpacing: Theme.dp(10)
-                    rowSpacing: Theme.dp(10)
+                    columns: col.width >= Theme.dp(660) ? 4 : col.width >= Theme.dp(420) ? 3 : 2
+                    columnSpacing: Theme.dp(8)
+                    rowSpacing: Theme.dp(8)
                     readonly property real tileW: Math.floor((width - columnSpacing * (columns - 1)) / columns)
 
                     Repeater {
                         model: root.quickPlaces
                         delegate: Rectangle {
-                            id: pCard
+                            id: pTile
                             required property var modelData
                             property bool dropping: false
                             width: placesGrid.tileW
-                            height: Theme.dp(56)
+                            height: Theme.dp(44)
                             radius: Theme.radius
-                            color: pCard.dropping ? Theme.selectionHover : pHit.pressed ? Theme.fillPress : pHit.containsMouse ? Theme.fillHover : Theme.card
-                            border.width: pCard.dropping ? Math.max(1, Theme.dp(1.5)) : 1
-                            border.color: pCard.dropping ? Theme.accent : Theme.line
-                            Behavior on color { ColorAnimation { duration: Theme.fast } }
+                            color: pTile.dropping ? Theme.selectionHover : pHit.pressed ? Theme.cardPress : pHit.containsMouse ? Theme.cardHover : Theme.card
+                            border.width: pTile.dropping ? Math.max(1, Theme.dp(1.5)) : 0
+                            border.color: Theme.accent
+                            Behavior on color { ColorAnimation { duration: Theme.hoverMs } }
 
-                            Rectangle {
-                                id: badge
-                                x: Theme.dp(10)
+                            Glyph {
+                                id: pGlyph
+                                x: Theme.dp(13)
                                 anchors.verticalCenter: parent.verticalCenter
-                                width: Theme.dp(36)
-                                height: width
-                                radius: Theme.round(9)
-                                color: Theme.accentPlate
-                                Glyph {
-                                    anchors.centerIn: parent
-                                    name: pCard.modelData.glyph
-                                    size: Theme.dp(20)
-                                    fill: 1
-                                    color: Theme.accentInk
-                                }
+                                name: pTile.modelData.glyph
+                                size: Theme.dp(18)
+                                fill: pHit.containsMouse ? 1 : 0
+                                color: pHit.containsMouse ? Theme.accentInk : Theme.ink2
                             }
                             Txt {
-                                anchors.left: badge.right
-                                anchors.leftMargin: Theme.dp(11)
+                                anchors.left: pGlyph.right
+                                anchors.leftMargin: Theme.dp(10)
                                 anchors.right: parent.right
                                 anchors.rightMargin: Theme.dp(12)
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: pCard.modelData.name
+                                text: pTile.modelData.name
                                 size: Theme.row
                                 strong: true
                                 color: Theme.ink
@@ -326,12 +290,12 @@ Item {
                                 cursorShape: Qt.PointingHandCursor
                                 acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
                                 onClicked: mouse => {
-                                    if (mouse.button === Qt.MiddleButton) root.browser.newTab(pCard.modelData.path)
+                                    if (mouse.button === Qt.MiddleButton) root.browser.newTab(pTile.modelData.path)
                                     else if (mouse.button === Qt.RightButton) {
                                         const at = pHit.mapToItem(root.browser.stage, mouse.x, mouse.y)
-                                        root.browser.actions.placeMenu(pCard.modelData.path, at.x, at.y)
+                                        root.browser.actions.placeMenu(pTile.modelData.path, at.x, at.y)
                                     } else {
-                                        root.folder.go(pCard.modelData.path)
+                                        root.folder.go(pTile.modelData.path)
                                         root.pane.forceActiveFocus()
                                     }
                                 }
@@ -339,247 +303,33 @@ Item {
                             DropArea {
                                 anchors.fill: parent
                                 onEntered: drag => {
-                                    if (!drag.hasUrls || root.browser.actions.dropRefused(drag.urls, pCard.modelData.path)) { drag.accepted = false; return }
-                                    pCard.dropping = true
+                                    if (!drag.hasUrls || root.browser.actions.dropRefused(drag.urls, pTile.modelData.path)) { drag.accepted = false; return }
+                                    pTile.dropping = true
                                 }
-                                onExited: pCard.dropping = false
-                                onDropped: drop => { pCard.dropping = false; root.browser.actions.drop(drop, pCard.modelData.path) }
+                                onExited: pTile.dropping = false
+                                onDropped: drop => { pTile.dropping = false; root.browser.actions.drop(drop, pTile.modelData.path) }
                             }
                         }
                     }
                 }
             }
 
-            // ---- bookmarks (only when the person has some)
+            // ---- storage & network mounts (real system utility)
             Column {
                 width: col.width
                 spacing: Theme.dp(10)
-                visible: root.marks.length > 0
-                Caption { text: I18n.tr("Bookmarks") }
-
-                Flow {
-                    width: parent.width
-                    spacing: Theme.dp(8)
-                    Repeater {
-                        model: root.marks
-                        delegate: Rectangle {
-                            id: mChip
-                            required property var modelData
-                            height: Theme.dp(36)
-                            width: Math.min(col.width, mRow.implicitWidth + Theme.dp(22))
-                            radius: Theme.round(10)
-                            color: mHit.pressed ? Theme.fillPress : mHit.containsMouse ? Theme.fillHover : Theme.card
-                            border.width: 1
-                            border.color: Theme.line
-                            Behavior on color { ColorAnimation { duration: Theme.fast } }
-                            Row {
-                                id: mRow
-                                anchors.centerIn: parent
-                                spacing: Theme.dp(7)
-                                Glyph {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    name: mChip.modelData.glyph
-                                    size: Theme.dp(17)
-                                    color: mChip.modelData.tint ? (Theme.tints[mChip.modelData.tint] ?? Theme.ink2) : Theme.ink2
-                                }
-                                Txt {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: mChip.modelData.name
-                                    size: Theme.small
-                                    strong: true
-                                    color: Theme.ink
-                                    width: Math.min(implicitWidth, Theme.dp(200))
-                                }
-                            }
-                            MouseArea {
-                                id: mHit
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
-                                onClicked: mouse => {
-                                    if (mChip.modelData.remote) { root.browser.actions.connect(mChip.modelData.path, mouse.button === Qt.MiddleButton); return }
-                                    if (mouse.button === Qt.MiddleButton) root.browser.newTab(mChip.modelData.path)
-                                    else if (mouse.button === Qt.RightButton) {
-                                        const at = mHit.mapToItem(root.browser.stage, mouse.x, mouse.y)
-                                        root.browser.actions.placeMenu(mChip.modelData.path, at.x, at.y)
-                                    } else {
-                                        root.folder.go(mChip.modelData.path)
-                                        root.pane.forceActiveFocus()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ---- recent files
-            Column {
-                width: col.width
-                spacing: Theme.dp(10)
-
-                Item {
-                    width: parent.width
-                    height: recentCap.implicitHeight
-                    Caption { id: recentCap; anchors.verticalCenter: parent.verticalCenter; text: I18n.tr("Recent") }
-                    Txt {
-                        visible: root.folder.all.length > 0
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: I18n.tr("See all")
-                        size: Theme.small
-                        strong: true
-                        color: allHit.containsMouse ? Theme.ink : Theme.accentInk
-                        MouseArea {
-                            id: allHit
-                            anchors.fill: parent
-                            anchors.margins: -Theme.dp(4)
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.folder.go("recent:")
-                        }
-                    }
-                }
-
-                Grid {
-                    id: recentGrid
-                    visible: root.recents.length > 0
-                    width: parent.width
-                    columns: col.width >= Theme.dp(620) ? 2 : 1
-                    columnSpacing: Theme.dp(10)
-                    rowSpacing: Theme.dp(8)
-                    readonly property real rowW: Math.floor((width - columnSpacing * (columns - 1)) / columns)
-
-                    Repeater {
-                        model: root.recents
-                        delegate: Rectangle {
-                            id: rCard
-                            required property var modelData
-                            required property int index
-                            width: recentGrid.rowW
-                            height: Theme.dp(58)
-                            radius: Theme.radius
-                            color: rHit.pressed ? Theme.fillPress : rHover.hovered ? Theme.fillHover : Theme.card
-                            border.width: 1
-                            border.color: Theme.line
-                            Behavior on color { ColorAnimation { duration: Theme.fast } }
-                            HoverHandler { id: rHover }
-
-                            FileIcon {
-                                id: rIcon
-                                x: Theme.dp(10)
-                                anchors.verticalCenter: parent.verticalCenter
-                                size: Theme.dp(36)
-                                entry: rCard.modelData
-                            }
-                            Column {
-                                anchors.left: rIcon.right
-                                anchors.leftMargin: Theme.dp(11)
-                                anchors.right: showFolderAct.visible ? showFolderAct.left : parent.right
-                                anchors.rightMargin: Theme.dp(10)
-                                anchors.verticalCenter: parent.verticalCenter
-                                spacing: Theme.dp(1)
-                                Txt {
-                                    width: parent.width
-                                    text: rCard.modelData.name
-                                    size: Theme.row
-                                    strong: true
-                                    color: Theme.ink
-                                    elide: Text.ElideMiddle
-                                }
-                                Txt {
-                                    width: parent.width
-                                    readonly property string where: Fmt.pretty(Fmt.parent(rCard.modelData.path))
-                                    readonly property string when: Fmt.when(rCard.modelData.mtime)
-                                    text: when.length > 0 ? where + " · " + when : where
-                                    size: Theme.small
-                                    color: Theme.ink3
-                                    elide: Text.ElideMiddle
-                                }
-                            }
-                            MouseArea {
-                                id: rHit
-                                anchors.fill: parent
-                                anchors.rightMargin: showFolderAct.visible ? Theme.dp(40) : 0
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
-                                onClicked: mouse => {
-                                    root.pane.activate()
-                                    if (mouse.button === Qt.RightButton) {
-                                        root.folder.only(rCard.index)
-                                        const at = rHit.mapToItem(root.browser.stage, mouse.x, mouse.y)
-                                        root.browser.actions.itemMenu(root.pane, at.x, at.y)
-                                    } else if (mouse.button === Qt.MiddleButton) {
-                                        if (rCard.modelData.dir) root.browser.newTab(rCard.modelData.path)
-                                        else root.browser.newTab(Fmt.parent(rCard.modelData.path), [rCard.modelData.path])
-                                    } else {
-                                        root.browser.actions.open(root.pane, [rCard.modelData])
-                                    }
-                                }
-                            }
-                            Act {
-                                id: showFolderAct
-                                visible: rHover.hovered
-                                anchors.right: parent.right
-                                anchors.rightMargin: Theme.dp(8)
-                                anchors.verticalCenter: parent.verticalCenter
-                                size: Theme.dp(28)
-                                glyphSize: Theme.dp(17)
-                                glyph: "folder_open"
-                                tip: I18n.tr("Show in folder")
-                                onClicked: {
-                                    root.folder.focusPath = rCard.modelData.path
-                                    root.folder.go(Fmt.parent(rCard.modelData.path))
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Quiet placeholder when there are no recent files yet.
-                Card {
-                    visible: !root.folder.loading && root.recents.length === 0
-                    width: parent.width
-                    height: Theme.dp(56)
-                    radius: Theme.radius
-                    Row {
-                        anchors.left: parent.left
-                        anchors.leftMargin: Theme.dp(16)
-                        anchors.right: parent.right
-                        anchors.rightMargin: Theme.dp(16)
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: Theme.dp(12)
-                        Glyph { anchors.verticalCenter: parent.verticalCenter; name: "schedule"; size: Theme.dp(20); color: Theme.ink3 }
-                        Txt {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width - Theme.dp(32)
-                            text: I18n.tr("Files you open in your apps show up here.")
-                            size: Theme.small
-                            color: Theme.ink3
-                        }
-                    }
-                }
-            }
-
-            // ---- drives and network mounts
-            Column {
-                width: col.width
-                spacing: Theme.dp(10)
-                visible: root.drives.length > 0
+                visible: root.sections.drives && root.drives.length > 0
 
                 Item {
                     width: parent.width
                     height: devCap.implicitHeight
-                    Caption { id: devCap; anchors.verticalCenter: parent.verticalCenter; text: I18n.tr("Devices") }
+                    Caption { id: devCap; anchors.verticalCenter: parent.verticalCenter; text: I18n.tr("Storage") }
                     Txt {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         text: I18n.tr("Connect a server")
                         size: Theme.small
-                        strong: true
-                        color: connHit.containsMouse ? Theme.ink : Theme.accentInk
+                        color: connHit.containsMouse ? Theme.ink : Theme.ink3
                         MouseArea {
                             id: connHit
                             anchors.fill: parent
@@ -606,70 +356,56 @@ Item {
                             required property var modelData
                             readonly property var it: dCard.modelData
                             width: drivesGrid.driveW
-                            height: dCard.it.meter >= 0 ? Theme.dp(74) : Theme.dp(62)
+                            height: dCard.it.meter >= 0 ? Theme.dp(68) : Theme.dp(56)
                             radius: Theme.radius
-                            color: dHit.pressed ? Theme.fillPress : dHover.hovered ? Theme.fillHover : Theme.card
-                            border.width: 1
-                            border.color: Theme.line
-                            Behavior on color { ColorAnimation { duration: Theme.fast } }
+                            color: dHit.pressed ? Theme.cardPress : dHover.hovered ? Theme.cardHover : Theme.card
+                            Behavior on color { ColorAnimation { duration: Theme.hoverMs } }
                             HoverHandler { id: dHover }
 
-                            Rectangle {
-                                id: dBadge
-                                x: Theme.dp(12)
+                            Glyph {
+                                id: dGlyph
+                                x: Theme.dp(15)
                                 anchors.verticalCenter: parent.verticalCenter
-                                width: Theme.dp(40)
-                                height: width
-                                radius: Theme.round(10)
-                                color: dCard.it.mounted ? Theme.fill : Theme.inset
-                                Glyph {
-                                    anchors.centerIn: parent
-                                    name: dCard.it.glyph
-                                    size: Theme.dp(21)
-                                    color: Theme.ink2
-                                    opacity: dCard.it.mounted ? 1 : 0.55
-                                }
+                                name: dCard.it.glyph
+                                size: Theme.dp(20)
+                                color: dHover.hovered && dCard.it.mounted ? Theme.accentInk : Theme.ink2
+                                opacity: dCard.it.mounted ? 1 : 0.5
                             }
                             Column {
-                                anchors.left: dBadge.right
-                                anchors.leftMargin: Theme.dp(12)
+                                anchors.left: dGlyph.right
+                                anchors.leftMargin: Theme.dp(13)
                                 anchors.right: dEject.visible ? dEject.left : parent.right
-                                anchors.rightMargin: Theme.dp(12)
+                                anchors.rightMargin: Theme.dp(14)
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: Theme.dp(5)
 
-                                Row {
+                                Item {
                                     width: parent.width
-                                    spacing: Theme.dp(6)
+                                    height: dName.implicitHeight
                                     Txt {
-                                        anchors.verticalCenter: parent.verticalCenter
+                                        id: dName
+                                        anchors.left: parent.left
+                                        anchors.right: fsTxt.visible ? fsTxt.left : parent.right
+                                        anchors.rightMargin: Theme.dp(8)
                                         text: dCard.it.name
                                         size: Theme.row
                                         strong: true
                                         color: Theme.ink
-                                        width: Math.min(implicitWidth, parent.width - (fsTag.visible ? fsTag.width + Theme.dp(8) : 0))
                                     }
-                                    Rectangle {
-                                        id: fsTag
+                                    Txt {
+                                        id: fsTxt
                                         visible: dCard.it.fstype.length > 0
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        height: Theme.dp(18)
-                                        width: fsTxt.implicitWidth + Theme.dp(10)
-                                        radius: height / 2
-                                        color: Theme.fill
-                                        Txt {
-                                            id: fsTxt
-                                            anchors.centerIn: parent
-                                            text: dCard.it.fstype
-                                            size: Theme.caption
-                                            color: Theme.ink3
-                                        }
+                                        anchors.right: parent.right
+                                        anchors.baseline: dName.baseline
+                                        text: dCard.it.fstype
+                                        size: Theme.caption
+                                        color: Theme.ink3
                                     }
                                 }
                                 Meter {
                                     visible: dCard.it.meter >= 0
                                     width: parent.width
-                                    height: Theme.dp(4)
+                                    height: Theme.dp(3)
                                     value: Math.max(0, dCard.it.meter)
                                 }
                                 Txt {
@@ -677,13 +413,13 @@ Item {
                                     visible: dCard.it.detail.length > 0
                                     text: dCard.it.detail
                                     size: Theme.small
-                                    color: Theme.ink3
+                                    color: dCard.it.meter > 0.9 ? Theme.danger : Theme.ink3
                                 }
                             }
                             MouseArea {
                                 id: dHit
                                 anchors.fill: parent
-                                anchors.rightMargin: dEject.visible ? Theme.dp(42) : 0
+                                anchors.rightMargin: dEject.visible ? Theme.dp(40) : 0
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 acceptedButtons: Qt.LeftButton | Qt.MiddleButton
@@ -693,13 +429,192 @@ Item {
                                 id: dEject
                                 visible: (dCard.it.kind === "device" && dCard.it.mounted && !dCard.it.root && dCard.it.removable) || dCard.it.kind === "share"
                                 anchors.right: parent.right
-                                anchors.rightMargin: Theme.dp(10)
+                                anchors.rightMargin: Theme.dp(8)
                                 anchors.verticalCenter: parent.verticalCenter
                                 size: Theme.dp(28)
                                 glyphSize: Theme.dp(17)
                                 glyph: "eject"
                                 tip: dCard.it.server ? I18n.tr("Disconnect") : I18n.tr("Put away")
                                 onClicked: root.ejectDrive(dCard.it)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ---- recent files (clean borderless list, hidden completely when empty)
+            Column {
+                width: col.width
+                spacing: Theme.dp(8)
+                visible: root.sections.recent && root.recents.length > 0
+
+                Item {
+                    width: parent.width
+                    height: recentCap.implicitHeight
+                    Caption { id: recentCap; anchors.verticalCenter: parent.verticalCenter; text: I18n.tr("Recent") }
+                    Txt {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: I18n.tr("See all")
+                        size: Theme.small
+                        color: allHit.containsMouse ? Theme.ink : Theme.ink3
+                        MouseArea {
+                            id: allHit
+                            anchors.fill: parent
+                            anchors.margins: -Theme.dp(4)
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.folder.go("recent:")
+                        }
+                    }
+                }
+
+                Column {
+                    width: parent.width
+                    spacing: Theme.dp(2)
+
+                    Repeater {
+                        model: root.recents
+                        delegate: Rectangle {
+                            id: rRow
+                            required property var modelData
+                            required property int index
+                            width: parent.width
+                            height: Theme.dp(44)
+                            radius: Theme.round(10)
+                            color: rHit.pressed ? Theme.fillPress : rHover.hovered ? Theme.fill : "transparent"
+                            Behavior on color { ColorAnimation { duration: Theme.hoverMs } }
+                            HoverHandler { id: rHover }
+
+                            FileIcon {
+                                id: rIcon
+                                x: Theme.dp(10)
+                                anchors.verticalCenter: parent.verticalCenter
+                                size: Theme.dp(26)
+                                entry: rRow.modelData
+                            }
+                            Txt {
+                                id: rName
+                                anchors.left: rIcon.right
+                                anchors.leftMargin: Theme.dp(10)
+                                anchors.right: rMeta.left
+                                anchors.rightMargin: Theme.dp(12)
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: rRow.modelData.name
+                                size: Theme.row
+                                color: Theme.ink
+                                elide: Text.ElideMiddle
+                            }
+                            Txt {
+                                id: rMeta
+                                anchors.right: showFolderAct.visible ? showFolderAct.left : parent.right
+                                anchors.rightMargin: Theme.dp(10)
+                                anchors.verticalCenter: parent.verticalCenter
+                                readonly property string where: Fmt.pretty(Fmt.parent(rRow.modelData.path))
+                                readonly property string when: Fmt.when(rRow.modelData.mtime)
+                                text: col.width >= Theme.dp(540) && when.length > 0 ? where + " · " + when : when || where
+                                size: Theme.small
+                                color: Theme.ink3
+                                elide: Text.ElideMiddle
+                                width: Math.min(implicitWidth, col.width * 0.42)
+                                horizontalAlignment: Text.AlignRight
+                            }
+                            MouseArea {
+                                id: rHit
+                                anchors.fill: parent
+                                anchors.rightMargin: showFolderAct.visible ? Theme.dp(38) : 0
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+                                onClicked: mouse => {
+                                    root.pane.activate()
+                                    if (mouse.button === Qt.RightButton) {
+                                        root.folder.only(rRow.index)
+                                        const at = rHit.mapToItem(root.browser.stage, mouse.x, mouse.y)
+                                        root.browser.actions.itemMenu(root.pane, at.x, at.y)
+                                    } else if (mouse.button === Qt.MiddleButton) {
+                                        if (rRow.modelData.dir) root.browser.newTab(rRow.modelData.path)
+                                        else root.browser.newTab(Fmt.parent(rRow.modelData.path), [rRow.modelData.path])
+                                    } else {
+                                        root.browser.actions.open(root.pane, [rRow.modelData])
+                                    }
+                                }
+                            }
+                            Act {
+                                id: showFolderAct
+                                visible: rHover.hovered
+                                anchors.right: parent.right
+                                anchors.rightMargin: Theme.dp(6)
+                                anchors.verticalCenter: parent.verticalCenter
+                                size: Theme.dp(28)
+                                glyphSize: Theme.dp(17)
+                                glyph: "folder_open"
+                                tip: I18n.tr("Show in folder")
+                                onClicked: {
+                                    root.folder.focusPath = rRow.modelData.path
+                                    root.folder.go(Fmt.parent(rRow.modelData.path))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ---- bookmarks (optional, off by default to avoid duplicating the Rail)
+            Column {
+                width: col.width
+                spacing: Theme.dp(10)
+                visible: root.sections.bookmarks && root.marks.length > 0
+                Caption { text: I18n.tr("Bookmarks") }
+
+                Flow {
+                    width: parent.width
+                    spacing: Theme.dp(8)
+                    Repeater {
+                        model: root.marks
+                        delegate: Rectangle {
+                            id: mChip
+                            required property var modelData
+                            height: Theme.dp(34)
+                            width: Math.min(col.width, mRow.implicitWidth + Theme.dp(22))
+                            radius: Theme.round(10)
+                            color: mHit.pressed ? Theme.cardPress : mHit.containsMouse ? Theme.cardHover : Theme.card
+                            Behavior on color { ColorAnimation { duration: Theme.hoverMs } }
+                            Row {
+                                id: mRow
+                                anchors.centerIn: parent
+                                spacing: Theme.dp(7)
+                                Glyph {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    name: mChip.modelData.glyph
+                                    size: Theme.dp(16)
+                                    color: mChip.modelData.tint ? (Theme.tints[mChip.modelData.tint] ?? Theme.ink2) : Theme.ink2
+                                }
+                                Txt {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: mChip.modelData.name
+                                    size: Theme.small
+                                    color: Theme.ink
+                                    width: Math.min(implicitWidth, Theme.dp(200))
+                                }
+                            }
+                            MouseArea {
+                                id: mHit
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+                                onClicked: mouse => {
+                                    if (mChip.modelData.remote) { root.browser.actions.connect(mChip.modelData.path, mouse.button === Qt.MiddleButton); return }
+                                    if (mouse.button === Qt.MiddleButton) root.browser.newTab(mChip.modelData.path)
+                                    else if (mouse.button === Qt.RightButton) {
+                                        const at = mHit.mapToItem(root.browser.stage, mouse.x, mouse.y)
+                                        root.browser.actions.placeMenu(mChip.modelData.path, at.x, at.y)
+                                    } else {
+                                        root.folder.go(mChip.modelData.path)
+                                        root.pane.forceActiveFocus()
+                                    }
+                                }
                             }
                         }
                     }

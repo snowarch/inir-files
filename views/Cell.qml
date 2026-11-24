@@ -48,7 +48,7 @@ Item {
         color: root.dropping ? Theme.selectionHover : root.chosen ? (root.lit ? (root.hovered ? Theme.selectionHover : Theme.selection) : Theme.fillPress) : root.hovered ? Theme.fill : "transparent"
         border.width: root.dropping || root.focused ? Math.max(1, Theme.dp(1.5)) : 0
         border.color: root.dropping ? Theme.accent : Theme.alpha(Theme.accent, 0.55)
-        Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: Theme.hoverMs; easing.type: Easing.OutCubic } }
     }
 
     // On whole pixels: a picture or a drawn sheet half a pixel off is resampled soft.

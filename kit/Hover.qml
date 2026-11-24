@@ -8,5 +8,5 @@ Rectangle {
     property bool on: false
     radius: Theme.radius
     color: on ? Theme.accentPlate : pressed ? Theme.fillPress : hovered ? Theme.fillHover : "transparent"
-    Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.OutCubic } }
+    Behavior on color { ColorAnimation { duration: Theme.hoverMs; easing.type: Easing.OutCubic } }
 }

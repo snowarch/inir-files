@@ -45,7 +45,7 @@ Item {
         width: root.side
         height: root.side
         color: root.dropping ? Theme.selectionHover : root.chosen ? (root.lit ? Theme.selection : Theme.fillPress) : root.hovered && !root.media ? Theme.fillPress : Theme.fill
-        Behavior on color { ColorAnimation { duration: Theme.fast; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: Theme.hoverMs; easing.type: Easing.OutCubic } }
 
         Item {
             id: content

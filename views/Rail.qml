@@ -202,7 +202,7 @@ Item {
             color: place.lifted ? Theme.raised : place.dropping ? Theme.selectionHover : place.current ? Theme.accentPlate : placeMouse.pressed ? Theme.fillPress : rowHover.hovered ? Theme.fill : "transparent"
             border.width: place.dropping ? Math.max(1, Theme.dp(1.5)) : place.lifted && !Theme.light ? 1 : 0
             border.color: place.dropping ? Theme.accent : Theme.line
-            Behavior on color { ColorAnimation { duration: Theme.fast } }
+            Behavior on color { ColorAnimation { duration: Theme.hoverMs } }
         }
         // Where a dropped folder joins the bookmarks.
         Rectangle {

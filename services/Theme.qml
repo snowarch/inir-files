@@ -125,6 +125,9 @@ Singleton {
     readonly property color canvas: root.light ? root.mix(root.surface, root.highest, 0.35) : root.surface
     readonly property color rail: root.light ? root.mix(root.surface, root.highest, 0.75) : root.mix(root.surface, root.high, 0.55)
     readonly property color card: root.light ? root.mix(root.surface, "#ffffff", 0.75) : root.mix(root.surface, root.high, 0.8)
+    // Solid hover/press steps over cards so hovering never drops a card to translucent fill.
+    readonly property color cardHover: root.mix(root.card, root.ink, root.light ? 0.035 : 0.055)
+    readonly property color cardPress: root.mix(root.card, root.ink, root.light ? 0.07 : 0.095)
     // Menus, sheets, tooltips: opaque, a step over everything.
     readonly property color raised: root.light ? "#ffffff" : root.mix(root.high, root.highest, 0.6)
     readonly property color line: root.light ? Qt.rgba(0, 0, 0, 0.08) : Qt.rgba(1, 1, 1, 0.065)
@@ -223,6 +226,7 @@ Singleton {
     // ---- motion
     readonly property bool motion: Prefs.motion
     function ms(value: real): int { return root.motion ? value : 0 }
+    readonly property int hoverMs: root.ms(65)
     readonly property int fast: root.ms(160)
     readonly property int normal: root.ms(220)
     readonly property int slow: root.ms(260)
