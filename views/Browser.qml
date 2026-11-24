@@ -64,18 +64,22 @@ FloatingWindow {
 
     // ---- tabs
     function defaultPlace(): string { return Prefs.get("start") === true ? "start:" : Core.home }
-    function newTab(path: string, chosen: var): void {
+    function newTab(path: string, chosen: var, at: var): void {
         const page = pageComponent.createObject(pages, { browser: root, startPath: path && path.length > 0 ? path : root.defaultPlace(), startChosen: chosen ?? [] })
         page.anchors.fill = pages
         page.visible = Qt.binding(() => root.currentPage === page)
-        root.tabs = root.tabs.concat([page])
-        root.tabIndex = root.tabs.length - 1
+        const list = root.tabs.slice()
+        const idx = typeof at === "number" && at >= 0 && at <= list.length ? at : list.length
+        list.splice(idx, 0, page)
+        root.tabs = list
+        root.tabIndex = idx
         Qt.callLater(root.focusPane)
     }
-    function closeTab(i: int): void {
+    function closeTab(i: int, record: var): void {
+        if (i < 0 || i >= root.tabs.length) return
         if (root.tabs.length <= 1) { root.closeWindow(); return }
         const page = root.tabs[i]
-        root.closedTabs = root.closedTabs.concat([page.activePane.folder.place]).slice(-10)
+        if (record !== false) root.closedTabs = root.closedTabs.concat([page.activePane.folder.place]).slice(-10)
         const list = root.tabs.slice()
         list.splice(i, 1)
         const current = root.currentPage
@@ -83,6 +87,52 @@ FloatingWindow {
         root.tabIndex = current === page ? Math.min(i, list.length - 1) : list.indexOf(current)
         page.destroy()
         Qt.callLater(root.focusPane)
+    }
+    function duplicateTab(i: int): void {
+        const page = root.tabs[i]
+        if (!page) return
+        root.newTab(page.activePane.folder.place, [], i + 1)
+    }
+    // Detach a tab into its own window — tiling compositors (Niri, Umbriel) place it straight beside this one.
+    function detachTab(i: int): void {
+        const page = root.tabs[i]
+        if (!page || root.tabs.length <= 1) return
+        const place = page.activePane.folder.place
+        root.closeTab(i, false)
+        root.newWindow(place)
+    }
+    function closeOtherTabs(keep: int): void {
+        if (keep < 0 || keep >= root.tabs.length || root.tabs.length <= 1) return
+        const kept = root.tabs[keep]
+        const closed = []
+        for (let k = 0; k < root.tabs.length; k++) {
+            if (k === keep) continue
+            closed.push(root.tabs[k].activePane.folder.place)
+            root.tabs[k].destroy()
+        }
+        root.closedTabs = root.closedTabs.concat(closed).slice(-10)
+        root.tabs = [kept]
+        root.tabIndex = 0
+        Qt.callLater(root.focusPane)
+    }
+    function closeTabsRight(from: int): void {
+        if (from < 0 || from >= root.tabs.length - 1) return
+        const closed = []
+        const list = root.tabs.slice(0, from + 1)
+        for (let k = from + 1; k < root.tabs.length; k++) {
+            closed.push(root.tabs[k].activePane.folder.place)
+            root.tabs[k].destroy()
+        }
+        root.closedTabs = root.closedTabs.concat(closed).slice(-10)
+        root.tabs = list
+        root.tabIndex = Math.min(root.tabIndex, list.length - 1)
+        Qt.callLater(root.focusPane)
+    }
+    function splitWithTab(i: int): void {
+        if (i < 0 || i >= root.tabs.length || i === root.tabIndex || !root.currentPage) return
+        const place = root.tabs[i].activePane.folder.place
+        root.currentPage.openSplit(place)
+        root.closeTab(i, false)
     }
     function moveTab(from: int, to: int): void {
         if (from === to || to < 0 || to >= root.tabs.length) return
@@ -294,12 +344,16 @@ FloatingWindow {
     Key { sequence: "Ctrl+L"; always: true; onActivated: root.head.editPath() }
     Key { sequences: [StandardKey.Find]; always: true; onActivated: root.head.focusSearch() }
     Key { sequence: "Ctrl+T"; always: true; onActivated: root.newTab(root.pane ? root.pane.folder.place : "") }
+    Key { sequence: "Ctrl+Shift+D"; always: true; onActivated: root.duplicateTab(root.tabIndex) }
+    Key { sequence: "Ctrl+Alt+W"; always: true; onActivated: if (root.tabs.length > 1) root.detachTab(root.tabIndex) }
     Key { sequence: "Ctrl+W"; always: true; onActivated: root.closeTab(root.tabIndex) }
     Key { sequence: "Ctrl+Shift+T"; always: true; onActivated: root.reopenTab() }
     Key { sequence: "Ctrl+Tab"; always: true; onActivated: root.stepTab(1) }
     Key { sequence: "Ctrl+Shift+Tab"; always: true; onActivated: root.stepTab(-1) }
     Key { sequence: "Ctrl+PgDown"; always: true; onActivated: root.stepTab(1) }
     Key { sequence: "Ctrl+PgUp"; always: true; onActivated: root.stepTab(-1) }
+    Key { sequence: "Ctrl+Shift+PgUp"; always: true; onActivated: root.moveTab(root.tabIndex, root.tabIndex - 1) }
+    Key { sequence: "Ctrl+Shift+PgDown"; always: true; onActivated: root.moveTab(root.tabIndex, root.tabIndex + 1) }
     Key { sequences: ["Alt+Left", "Back"]; always: true; onActivated: root.pane.folder.goBack() }
     Key { sequences: ["Alt+Right", "Forward"]; always: true; onActivated: root.pane.folder.goForward() }
     Key { sequence: "Alt+Up"; always: true; onActivated: root.pane.folder.goUp() }

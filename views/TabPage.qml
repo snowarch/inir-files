@@ -33,17 +33,28 @@ Item {
         if (f.path === "/") return "hard_drive"
         return "folder"
     }
+    function openSplit(place: string): void {
+        second.folder.go(place && place.length > 0 ? place : root.activePane.folder.place, false)
+        root.split = true
+        second.activate()
+    }
     function toggleSplit(): void {
         if (!root.split) {
-            second.folder.go(root.activePane.folder.place, false)
-            root.split = true
-            second.activate()
+            root.openSplit(root.activePane.folder.place)
         } else {
             const keep = root.activePane
             root.split = false
             if (keep === second) first.folder.go(second.folder.place)
             first.activate()
         }
+    }
+    function detachPane(pane: var): void {
+        if (!root.split) return
+        const place = pane.folder.place
+        const keep = pane === first ? second : first
+        root.activePane = keep
+        root.toggleSplit()
+        root.browser.newWindow(place)
     }
     function otherPane(pane: var): var { return root.split ? (pane === first ? second : first) : null }
     Component.onCompleted: {
@@ -77,19 +88,29 @@ Item {
                 strong: strip.pane.active
                 color: strip.pane.active ? Theme.ink : Theme.ink3
                 elide: Text.ElideMiddle
-                // Clear of the close button: the row's start (50) and the button with its margins (38).
-                width: Math.min(implicitWidth, strip.width - Theme.dp(88))
+                // Clear of the action buttons on the right: row start (50) and two buttons with margins (66).
+                width: Math.min(implicitWidth, Math.max(Theme.dp(40), strip.width - Theme.dp(116)))
             }
         }
-        Act {
+        Row {
             anchors.right: parent.right
             anchors.rightMargin: Theme.dp(6)
             anchors.verticalCenter: parent.verticalCenter
-            size: Theme.dp(24)
-            glyphSize: Theme.dp(15)
-            glyph: "close"
-            tip: I18n.tr("Close this side")
-            onClicked: { root.activePane = strip.pane; root.toggleSplit() }
+            spacing: Theme.dp(2)
+            Act {
+                size: Theme.dp(24)
+                glyphSize: Theme.dp(15)
+                glyph: "open_in_new"
+                tip: I18n.tr("Move to new window")
+                onClicked: root.detachPane(strip.pane)
+            }
+            Act {
+                size: Theme.dp(24)
+                glyphSize: Theme.dp(15)
+                glyph: "close"
+                tip: I18n.tr("Close this side")
+                onClicked: { root.activePane = strip.pane === first ? second : first; root.toggleSplit() }
+            }
         }
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
         TapHandler { onTapped: strip.pane.activate() }

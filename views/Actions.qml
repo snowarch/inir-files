@@ -400,6 +400,8 @@ Item {
         return view.concat([
             { text: I18n.tr("New folder"), glyph: "create_new_folder", keys: "Ctrl+Shift+N", enabled: root.here(pane).length > 0, run: () => root.newFolder(pane) },
             { text: I18n.tr("New tab"), glyph: "tab", keys: "Ctrl+T", run: () => root.browser.newTab(pane.folder.place) },
+            { text: I18n.tr("Duplicate tab"), glyph: "tab_duplicate", keys: "Ctrl+Shift+D", run: () => root.browser.duplicateTab(root.browser.tabIndex) },
+            root.browser.tabs.length > 1 ? { text: I18n.tr("Move tab to new window"), glyph: "open_in_new", keys: "Ctrl+Alt+W", run: () => root.browser.detachTab(root.browser.tabIndex) } : null,
             { text: I18n.tr("New window"), glyph: "open_in_new", keys: "Ctrl+N", run: () => root.browser.newWindow(pane.folder.place) },
             { text: I18n.tr("Reopen closed tab"), glyph: "restore_page", keys: "Ctrl+Shift+T", enabled: root.browser.closedTabs.length > 0, run: () => root.browser.reopenTab() },
             { text: I18n.tr("Split view"), glyph: "vertical_split", keys: "F3", checked: page ? page.split : false, run: () => page && page.toggleSplit() },
