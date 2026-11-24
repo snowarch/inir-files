@@ -351,16 +351,9 @@ Item {
         if (Prefs.get("sort") === key) Prefs.set("desc", !Prefs.get("desc"))
         else { Prefs.set("sort", key); Prefs.set("desc", key === "mtime" || key === "size") }
     }
-    // The grid and the gallery share their zoom; the list and the columns share theirs.
-    function zoomKey(): string { return ["grid", "gallery"].includes(Prefs.get("view")) ? "zoom" : "listZoom" }
-    function zoom(step: int): void {
-        if (root.zoomKey() === "zoom") Prefs.set("zoom", Math.max(1, Math.min(7, Number(Prefs.get("zoom")) + step)))
-        else Prefs.set("listZoom", Math.max(0, Math.min(2, Number(Prefs.get("listZoom")) + step)))
-    }
-    function resetZoom(): void {
-        const key = root.zoomKey()
-        Prefs.set(key, Prefs.defaults[key])
-    }
+    // Each pane holds its own zoom so zooming one window never stalls others.
+    function zoom(step: int): void { root.browser.activePane?.stepZoom(step) }
+    function resetZoom(): void { root.browser.activePane?.resetZoom() }
 
     // ---- menus
     function sortEntries(): var {

@@ -11,6 +11,29 @@ FocusScope {
     property alias folder: folder
     readonly property bool active: root.browser.activePane === root
     property string viewMode: Prefs.get("view")
+    // Each pane holds its own zoom (seeded from Prefs on creation) so Ctrl+Scroll never re-layouts other windows or hidden tabs.
+    property int zoom: 3
+    property int listZoom: 1
+    readonly property bool gridZoomMode: root.viewMode === "grid" || root.viewMode === "gallery"
+    Component.onCompleted: {
+        root.zoom = Math.max(1, Math.min(7, Number(Prefs.get("zoom"))))
+        root.listZoom = Math.max(0, Math.min(2, Number(Prefs.get("listZoom"))))
+    }
+    function setZoom(v: int): void {
+        if (root.gridZoomMode) {
+            const next = Math.max(1, Math.min(7, v))
+            if (root.zoom === next) return
+            root.zoom = next
+            Prefs.set("zoom", next)
+        } else {
+            const next = Math.max(0, Math.min(2, v))
+            if (root.listZoom === next) return
+            root.listZoom = next
+            Prefs.set("listZoom", next)
+        }
+    }
+    function stepZoom(step: int): void { root.setZoom((root.gridZoomMode ? root.zoom : root.listZoom) + step) }
+    function resetZoom(): void { root.setZoom(Number(Prefs.defaults[root.gridZoomMode ? "zoom" : "listZoom"])) }
     readonly property Item view: loader.item ? loader.item.view : null
     // The view scrolls sideways itself (columns, a list wider than the pane): a sideways swipe is its own.
     readonly property bool sideways: loader.item?.sideways ?? false
@@ -257,7 +280,7 @@ FocusScope {
             if (d * wheelSum < 0) wheelSum = 0
             wheelSum += d
             const steps = Math.trunc(wheelSum / 120)
-            if (steps !== 0) { wheelSum -= steps * 120; root.browser.actions.zoom(steps) }
+            if (steps !== 0) { wheelSum -= steps * 120; root.stepZoom(steps) }
         }
     }
 

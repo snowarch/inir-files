@@ -9,7 +9,7 @@ Item {
     required property var pane
     readonly property alias view: grid
     readonly property var sizes: [40, 56, 72, 96, 128, 176, 240]
-    readonly property int zoom: Math.max(1, Math.min(root.sizes.length, Number(Prefs.get("zoom"))))
+    readonly property int zoom: Math.max(1, Math.min(root.sizes.length, root.pane.zoom))
     readonly property real iconSize: Theme.dp(root.sizes[root.zoom - 1])
     readonly property real grow: Theme.dp(12)
     readonly property real minCell: root.iconSize + Theme.dp(52)
@@ -51,10 +51,11 @@ Item {
 
     // The rest of the folder's pictures are made while the first screen is looked at, so a scroll finds them ready.
     function ahead(): void {
+        if (!root.visible) return
         const f = root.pane.folder
         if (f.mode === "folder" && !f.remote) Core.thumbAhead(f.all, Core.thumbSize((root.iconSize + root.grow) * (root.Window.window?.devicePixelRatio ?? 1)))
     }
-    Timer { id: aheadSoon; interval: 250; onTriggered: root.ahead() }
+    Timer { id: aheadSoon; interval: 450; onTriggered: root.ahead() }
     Connections { target: root.pane.folder; function onReset() { aheadSoon.restart() } }
     Component.onCompleted: aheadSoon.restart()
     onIconSizeChanged: aheadSoon.restart()

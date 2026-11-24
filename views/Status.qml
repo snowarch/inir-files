@@ -89,8 +89,8 @@ Item {
             readonly property bool grid: root.pane && (root.pane.viewMode === "grid" || root.pane.viewMode === "gallery")
             readonly property int lo: zoom.grid ? 1 : 0
             readonly property int hi: zoom.grid ? 7 : 2
-            readonly property int value: Number(Prefs.get(zoom.grid ? "zoom" : "listZoom"))
-            function set(v: int): void { Prefs.set(zoom.grid ? "zoom" : "listZoom", Math.max(zoom.lo, Math.min(zoom.hi, v))) }
+            readonly property int value: root.pane ? (zoom.grid ? root.pane.zoom : root.pane.listZoom) : zoom.lo
+            function set(v: int): void { if (root.pane) root.pane.setZoom(v) }
             Glyph { id: zlo; anchors.verticalCenter: parent.verticalCenter; name: zoom.grid ? "photo_size_select_small" : "density_small"; size: Theme.dp(15); color: Theme.ink3 }
             Item {
                 id: track

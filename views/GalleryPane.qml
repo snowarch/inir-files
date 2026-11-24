@@ -10,7 +10,7 @@ Item {
     required property var pane
     readonly property alias view: grid
     readonly property var sizes: [64, 88, 112, 144, 184, 240, 320]
-    readonly property int zoom: Math.max(1, Math.min(root.sizes.length, Number(Prefs.get("zoom"))))
+    readonly property int zoom: Math.max(1, Math.min(root.sizes.length, root.pane.zoom))
     readonly property real least: Theme.dp(root.sizes[root.zoom - 1])
     readonly property real gap: Theme.dp(4)
     readonly property int columns: Math.max(1, Math.floor(grid.width / root.least))
@@ -48,12 +48,13 @@ Item {
 
     // The folder's photos and films are made while the first screen is looked at, so a scroll finds them ready.
     function ahead(): void {
+        if (!root.visible) return
         const f = root.pane.folder
         if (f.mode !== "folder" || f.remote) return
         const px = (grid.cellWidth - root.gap) * (root.Window.window?.devicePixelRatio ?? 1)
         Core.thumbAhead(f.all.filter(e => !e.dir && (e.kind === "image" || e.kind === "video")), Core.thumbSize(px, true))
     }
-    Timer { id: aheadSoon; interval: 250; onTriggered: root.ahead() }
+    Timer { id: aheadSoon; interval: 450; onTriggered: root.ahead() }
     Connections { target: root.pane.folder; function onReset() { aheadSoon.restart() } }
     Component.onCompleted: aheadSoon.restart()
     onColumnsChanged: aheadSoon.restart()

@@ -21,6 +21,10 @@ Item {
     readonly property real dpr: root.Window.window?.devicePixelRatio ?? 1
     readonly property real px: (root.size + root.grow) * root.dpr
     readonly property string thumbSize: Core.thumbSize(root.px, root.crop)
+    // Decode at the freedesktop bucket size, not the exact pixel width: zooming inside a bucket scales the resident GPU
+    // texture immediately with zero disk re-decode.
+    readonly property int thumbPx: root.thumbSize === "normal" ? 128 : root.thumbSize === "large" ? 256 : root.thumbSize === "x-large" ? 512 : 1024
+    readonly property int iconPx: root.px <= 48 ? 48 : root.px <= 128 ? 128 : 256
     readonly property bool dir: root.entry?.dir === true
     // A drawn folder holds a picture from inside it: its cover, else its first picture.
     readonly property bool cover: root.dir && root.size >= 48 && Prefs.get("covers") !== false && Prefs.get("icons") !== "system"
@@ -82,9 +86,9 @@ Item {
         clip: root.crop
         asynchronous: true
         smooth: true
-        // Decoded at the size it draws: no mipmaps to keep in memory.
-        sourceSize.width: root.px
-        sourceSize.height: root.px
+        // Bucket-sized decode: zooming inside a bucket never drops and re-decodes the texture.
+        sourceSize.width: root.thumbPx
+        sourceSize.height: root.thumbPx
         opacity: status === Image.Ready ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Theme.fast } }
         // A hairline round the picture so a white page still has an edge.
@@ -133,8 +137,8 @@ Item {
         active: !root.thumbReady && !root.awaiting && root.systemIcon.length > 0
         sourceComponent: Image {
             source: root.systemIcon
-            sourceSize.width: root.px
-            sourceSize.height: root.px
+            sourceSize.width: root.iconPx
+            sourceSize.height: root.iconPx
             asynchronous: true
             smooth: true
         }

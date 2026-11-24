@@ -11,7 +11,7 @@ Item {
     readonly property alias view: list
     readonly property bool sideways: list.contentWidth > list.width + 1
     readonly property var folder: root.pane.folder
-    readonly property int zoom: Math.max(0, Math.min(2, Number(Prefs.get("listZoom"))))
+    readonly property int zoom: Math.max(0, Math.min(2, root.pane.listZoom))
     readonly property real rowHeight: Theme.dp([28, 34, 46][root.zoom])
     readonly property real iconSize: Theme.dp([16, 22, 32][root.zoom])
 
