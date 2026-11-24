@@ -7,18 +7,25 @@ Sheet {
     id: root
     property var question: ({})
     property bool all: false
-    property var src: null
-    property var dst: null
+    readonly property string srcPath: typeof root.question.src === "string" ? root.question.src : (root.question.src?.path ?? "")
+    readonly property string dstPath: typeof root.question.dst === "string" ? root.question.dst : (root.question.dst?.path ?? "")
+    property var src: typeof root.question.src === "object" ? root.question.src : null
+    property var dst: typeof root.question.dst === "object" ? root.question.dst : null
     dismissable: false
     cardWidth: Theme.dp(520)
-    title: root.question.dirs ? I18n.tr("A folder named “%1” is already there", Fmt.name(root.question.dst ?? "")) : I18n.tr("“%1” is already there", Fmt.name(root.question.dst ?? ""))
-    subtitle: I18n.tr("In %1", Fmt.pretty(Fmt.parent(root.question.dst ?? "/")))
+    title: root.question.dirs ? I18n.tr("A folder named “%1” is already there", Fmt.name(root.dstPath)) : I18n.tr("“%1” is already there", Fmt.name(root.dstPath))
+    subtitle: I18n.tr("In %1", Fmt.pretty(Fmt.parent(root.dstPath || "/")))
 
-    Component.onCompleted: Core.call("stat", { paths: [root.question.src, root.question.dst] }, r => {
-        if (!r.ok) return
-        root.src = r.entries.find(e => e.path === root.question.src) ?? null
-        root.dst = r.entries.find(e => e.path === root.question.dst) ?? null
-    })
+    Component.onCompleted: {
+        if (root.src && root.dst) return
+        const paths = [root.srcPath, root.dstPath].filter(p => p.length > 0)
+        if (paths.length === 0) return
+        Core.call("stat", { paths: paths }, r => {
+            if (!root || !r.ok) return
+            root.src = r.entries.find(e => e.path === root.srcPath) ?? root.src
+            root.dst = r.entries.find(e => e.path === root.dstPath) ?? root.dst
+        })
+    }
     function answer(action: string): void {
         Core.answer(root.question.job, action, root.all)
         root.close()

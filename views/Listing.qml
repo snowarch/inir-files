@@ -10,6 +10,11 @@ Item {
     property bool loading: false
     property string error: ""
     property int serial: 0
+    property string loadedPath: ""
+    property string sortKey: Prefs.get("sort")
+    property bool desc: Prefs.get("desc")
+    property bool dirsFirst: Prefs.get("dirsFirst")
+    property bool showHidden: Prefs.get("hidden")
     // The rows as the model holds them, read in place of the model.
     property var rows: []
     // Rows already known for a path, shown at once while the disk is read again: (path) => rows, or null.
@@ -20,18 +25,28 @@ Item {
 
     ListModel { id: entries }
 
+    function replaceModel(list: var): void {
+        entries.clear()
+        for (let i = 0; i < list.length; i++) entries.append(list[i])
+    }
+
     function load(): void {
-        if (root.path.length === 0) { root.rows = []; entries.clear(); return }
+        if (root.path.length === 0) { root.loadedPath = ""; root.rows = []; entries.clear(); return }
+        const pathChanged = root.loadedPath !== root.path
+        root.loadedPath = root.path
         const s = ++root.serial
         root.loading = true
-        const seed = root.seedOf ? root.seedOf(root.path) : null
-        if (seed) {
-            root.rows = seed
-            entries.clear()
-            entries.append(seed)
+        if (pathChanged || entries.count === 0) {
+            const seed = root.seedOf ? root.seedOf(root.path) : null
+            if (seed && seed.length > 0) {
+                const copy = []
+                for (let i = 0; i < seed.length; i++) copy.push(seed[i])
+                root.rows = copy
+                root.replaceModel(copy)
+            }
         }
-        Core.call("list", { path: root.path, hidden: Prefs.get("hidden"), sort: Prefs.get("sort"), desc: Prefs.get("desc"), dirsFirst: Prefs.get("dirsFirst"), counts: false }, r => {
-            if (s !== root.serial) return
+        Core.call("list", { path: root.path, hidden: root.showHidden, sort: root.sortKey, desc: root.desc, dirsFirst: root.dirsFirst, counts: false }, r => {
+            if (!root || s !== root.serial) return
             root.loading = false
             root.error = r.ok ? "" : r.error
             // The keys only some entries carry, so every row has every role.
@@ -40,11 +55,10 @@ Item {
             const old = root.rows
             root.rows = list
             // Same rows in the same order: only what changed is touched.
-            if (list.length === old.length && list.every((e, i) => old[i].path === e.path)) {
+            if (entries.count === list.length && list.length === old.length && list.every((e, i) => old[i].path === e.path)) {
                 for (let i = 0; i < list.length; i++) for (const k in list[i]) if (old[i][k] !== list[i][k]) entries.setProperty(i, k, list[i][k])
             } else {
-                entries.clear()
-                entries.append(list)
+                root.replaceModel(list)
             }
             if (r.ok) root.loaded(list)
         })
@@ -58,12 +72,12 @@ Item {
         Core.holdWatch(root.held)
     }
     onPathChanged: { root.hold(); root.load() }
-    Component.onCompleted: { root.hold(); root.load() }
+    onSortKeyChanged: if (root.loadedPath.length > 0) root.load()
+    onDescChanged: if (root.loadedPath.length > 0) root.load()
+    onDirsFirstChanged: if (root.loadedPath.length > 0) root.load()
+    onShowHiddenChanged: if (root.loadedPath.length > 0) root.load()
+    Component.onCompleted: { root.hold(); if (root.loadedPath !== root.path) root.load() }
     Component.onDestruction: Core.dropWatch(root.held)
-    Connections {
-        target: Prefs
-        function onValuesChanged() { root.load() }
-    }
     Connections {
         target: Core
         function onChanged(paths) { if (paths.indexOf(root.path) >= 0) root.load() }

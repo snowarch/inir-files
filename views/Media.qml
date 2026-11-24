@@ -54,11 +54,11 @@ Item {
         onTriggered: {
             const p = root.path
             if (p.length === 0) return
-            Core.call("info", { path: p }, r => { if (r.ok && p === root.path) root.info = r })
-            if (root.textual) Core.call("text", { path: p, limit: root.large ? 1048576 : 98304 }, r => { if (r.ok && p === root.path) root.text = r })
+            Core.call("info", { path: p }, r => { if (root && r.ok && p === root.path) root.info = r })
+            if (root.textual) Core.call("text", { path: p, limit: root.large ? 1048576 : 98304 }, r => { if (root && r.ok && p === root.path) root.text = r })
             if (root.large && root.kind === "folder")
                 Core.call("list", { path: p, hidden: Prefs.get("hidden"), sort: Prefs.get("sort"), desc: Prefs.get("desc"), dirsFirst: Prefs.get("dirsFirst"), counts: false }, r => {
-                    if (p !== root.path) return
+                    if (!root || p !== root.path) return
                     root.heldError = r.ok ? "" : r.error
                     root.held = r.ok ? (r.entries ?? []) : []
                 })
