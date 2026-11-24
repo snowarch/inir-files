@@ -168,6 +168,7 @@ Item {
                 root.enter(Fmt.parent(root.path))
                 return
             }
+            root.choose = []
             root.error = r.error
             root.all = []
             entries.clear()

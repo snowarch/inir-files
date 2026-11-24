@@ -192,7 +192,7 @@ FocusScope {
         anchors.fill: parent
         enabled: (folder.mode === "folder" && folder.writable) || folder.mode === "trash"
         onEntered: drag => {
-            if (!drag.hasUrls || root.browser.actions.dropRefused(drag.urls, folder.mode === "trash" ? "trash:" : folder.path, true)) { drag.accepted = false; return }
+            if (!drag.hasUrls || root.browser.actions.dropRefused(drag.urls, folder.mode === "trash" ? "trash:" : folder.path)) { drag.accepted = false; return }
             root.dropHover = true
         }
         onExited: root.dropHover = false

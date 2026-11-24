@@ -126,7 +126,7 @@ Item {
 
     // ---- drag and drop
     // True when the drop makes no sense: nothing local, a folder into itself, files into the folder they are in.
-    function dropRefused(urls: var, dest: string, here: bool): bool {
+    function dropRefused(urls: var, dest: string): bool {
         const paths = root.pathsOf(urls)
         if (paths.length === 0) return true
         if (dest === "trash:") return paths.every(p => p.indexOf("/.local/share/Trash/") >= 0)
@@ -136,7 +136,7 @@ Item {
     // Ctrl copies, Ctrl+Shift links, a plain drop moves on the same disk and copies across disks.
     function drop(drop: var, dest: string): void {
         const paths = root.pathsOf(drop.urls)
-        if (paths.length === 0 || root.dropRefused(drop.urls, dest, false)) return
+        if (paths.length === 0 || root.dropRefused(drop.urls, dest)) return
         const n = paths.length
         if (dest === "trash:") {
             root.job("trash", { paths: paths }, I18n.n("%1 item moved to the trash", "%1 items moved to the trash", n))

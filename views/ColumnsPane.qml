@@ -240,7 +240,7 @@ Item {
         property string dest: ""
         property bool hover: false
         onEntered: drag => {
-            if (!drag.hasUrls || ground.dest.length === 0 || root.pane.browser.actions.dropRefused(drag.urls, ground.dest, true)) { drag.accepted = false; return }
+            if (!drag.hasUrls || ground.dest.length === 0 || root.pane.browser.actions.dropRefused(drag.urls, ground.dest)) { drag.accepted = false; return }
             ground.hover = true
         }
         onExited: ground.hover = false
