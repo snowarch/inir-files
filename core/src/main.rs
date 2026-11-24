@@ -96,6 +96,7 @@ fn streamed(ctx: &Arc<Ctx>, op: &str, req: &Value) {
     match op {
         "search" => search::search(ctx, req, flag.clone()),
         "dirsize" => info::dirsize(ctx, &token, paths(&req["paths"]), flag.clone()),
+        "space_map" => info::space_map(ctx, &token, PathBuf::from(req["path"].as_str().unwrap_or("")), flag.clone()),
         "checksum" => info::checksum(ctx, &token, &PathBuf::from(req["path"].as_str().unwrap_or("")), req["algo"].as_str().unwrap_or("sha256"), flag.clone()),
         _ => {}
     }
@@ -146,7 +147,7 @@ fn handle(ctx: &Arc<Ctx>, req: Value) {
             ctx.thumbs.clear();
             Ok(json!({}))
         }
-        "search" | "dirsize" | "checksum" => {
+        "search" | "dirsize" | "space_map" | "checksum" => {
             reply(ctx, &id, Ok(json!({})));
             streamed(ctx, &op, &req);
             return;

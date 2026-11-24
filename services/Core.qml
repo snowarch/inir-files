@@ -28,6 +28,7 @@ Singleton {
     signal conflict(var question)
     signal searchBatch(var batch)
     signal sizeEvent(var data)
+    signal spaceMapEvent(var data)
     signal checksumEvent(var data)
     signal failed(string op, string error)
     // A server being connected wants an answer (a password, a choice): { token, kind, message, fields, choices }.
@@ -216,6 +217,7 @@ Singleton {
         case "conflict": root.conflict(m); break
         case "search": root.searchBatch(m); break
         case "dirsize": root.sizeEvent(m); break
+        case "space_map": root.spaceMapEvent(m); break
         case "checksum": root.checksumEvent(m); break
         case "places": root.places = m; break
         case "ask": root.asked(m); break

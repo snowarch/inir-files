@@ -343,6 +343,134 @@ pub fn dirsize(ctx: &Ctx, token: &str, paths: Vec<PathBuf>, stop: Arc<AtomicBool
     ctx.out.event("dirsize", json!({"token": token, "size": size, "files": files, "dirs": dirs, "done": true}));
 }
 
+/// Computes disk usage of every immediate child of `root` in parallel across CPU cores, staying on `root`'s filesystem,
+/// and streams sorted progress events so the UI can show a live space breakdown.
+pub fn space_map(ctx: &Ctx, token: &str, root: PathBuf, stop: Arc<AtomicBool>) {
+    let root_dev = fs::symlink_metadata(&root).map(|m| m.dev()).ok();
+    let Ok(rd) = fs::read_dir(&root) else {
+        ctx.out.event("space_map", json!({"token": token, "path": root.to_string_lossy(), "total": 0, "items": [], "done": true, "error": "denied"}));
+        return;
+    };
+
+    struct Child {
+        name: String,
+        path: PathBuf,
+        dir: bool,
+        size: u64,
+        files: u64,
+    }
+
+    let mut files_direct: Vec<Child> = Vec::new();
+    let mut dirs_todo: Vec<(String, PathBuf)> = Vec::new();
+    let mut seen_root = std::collections::HashSet::new();
+
+    for de in rd.flatten() {
+        let path = de.path();
+        let name = de.file_name().to_string_lossy().into_owned();
+        let Ok(m) = fs::symlink_metadata(&path) else { continue };
+        if let Some(rdev) = root_dev {
+            if m.dev() != rdev {
+                continue;
+            }
+        }
+        if m.is_dir() {
+            dirs_todo.push((name, path));
+        } else {
+            let bytes = if m.nlink() > 1 && !seen_root.insert((m.dev(), m.ino())) { 0 } else { m.blocks() * 512 };
+            files_direct.push(Child { name, path, dir: false, size: bytes, files: 1 });
+        }
+    }
+
+    let results = std::sync::Mutex::new(files_direct);
+    let next_idx = std::sync::atomic::AtomicUsize::new(0);
+    let last_emit = std::sync::Mutex::new(std::time::Instant::now());
+    let workers = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(2, 8);
+
+    let emit = |done: bool| {
+        let mut items = results.lock().unwrap();
+        items.sort_by(|a, b| b.size.cmp(&a.size).then_with(|| a.name.cmp(&b.name)));
+        let total: u64 = items.iter().map(|c| c.size).sum();
+        let payload: Vec<Value> = items
+            .iter()
+            .take(80)
+            .map(|c| json!({"name": c.name, "path": c.path.to_string_lossy(), "dir": c.dir, "size": c.size, "files": c.files}))
+            .collect();
+        ctx.out.event(
+            "space_map",
+            json!({"token": token, "path": root.to_string_lossy(), "total": total, "items": payload, "count": items.len(), "done": done}),
+        );
+    };
+
+    std::thread::scope(|s| {
+        for _ in 0..workers {
+            let dirs_todo = &dirs_todo;
+            let next_idx = &next_idx;
+            let results = &results;
+            let last_emit = &last_emit;
+            let stop = &stop;
+            let emit = &emit;
+            s.spawn(move || loop {
+                if stop.load(Ordering::Relaxed) {
+                    return;
+                }
+                let i = next_idx.fetch_add(1, Ordering::Relaxed);
+                let Some((name, path)) = dirs_todo.get(i) else { return };
+                let (size, files) = measure_tree(path, root_dev, stop);
+                if stop.load(Ordering::Relaxed) {
+                    return;
+                }
+                results.lock().unwrap().push(Child { name: name.clone(), path: path.clone(), dir: true, size, files });
+                let should_emit = {
+                    let mut t = last_emit.lock().unwrap();
+                    if t.elapsed().as_millis() >= 140 {
+                        *t = std::time::Instant::now();
+                        true
+                    } else {
+                        false
+                    }
+                };
+                if should_emit {
+                    emit(false);
+                }
+            });
+        }
+    });
+
+    if !stop.load(Ordering::Relaxed) {
+        emit(true);
+    }
+}
+
+fn measure_tree(root: &Path, root_dev: Option<u64>, stop: &AtomicBool) -> (u64, u64) {
+    let mut size = 0u64;
+    let mut files = 0u64;
+    let mut seen = std::collections::HashSet::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(p) = stack.pop() {
+        if stop.load(Ordering::Relaxed) {
+            return (size, files);
+        }
+        let Ok(m) = fs::symlink_metadata(&p) else { continue };
+        if let Some(rdev) = root_dev {
+            if m.dev() != rdev {
+                continue;
+            }
+        }
+        if m.nlink() > 1 && !m.is_dir() && !seen.insert((m.dev(), m.ino())) {
+            continue;
+        }
+        if m.is_dir() {
+            if let Ok(rd) = fs::read_dir(&p) {
+                stack.extend(rd.flatten().map(|d| d.path()));
+            }
+        } else {
+            files += 1;
+            size += m.blocks() * 512;
+        }
+    }
+    (size, files)
+}
+
 pub fn checksum(ctx: &Ctx, token: &str, path: &Path, algo: &str, stop: Arc<AtomicBool>) {
     use md5::Md5;
     use sha2::{Digest, Sha256, Sha512};
