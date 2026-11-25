@@ -1,6 +1,6 @@
 [package]
 name = "inir-files-core"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 license = "GPL-3.0-or-later"
 description = "The engine of iNiR Files: listing, thumbnails, file jobs, trash, devices and search, over JSON lines"
