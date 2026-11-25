@@ -241,8 +241,12 @@ fn main() {
             Err(_) => ctx.out.event("error", json!({"error": "badjson"})),
         }
     }
-    // The window closed: a copy at work still ends whole.
-    while ctx.jobs.active() > 0 {
-        std::thread::sleep(std::time::Duration::from_millis(200));
+    // The window closed: a copy or portal D-Bus reply at work still finishes whole.
+    let mut waited = 0;
+    while ctx.jobs.active() > 0 || (ctx.portal.active() > 0 && waited < 25) {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        waited += 1;
     }
+    // Brief flush window so any just-sent D-Bus reply leaves the socket before exit.
+    std::thread::sleep(std::time::Duration::from_millis(80));
 }

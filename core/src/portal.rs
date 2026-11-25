@@ -67,9 +67,19 @@ impl Future for Slot {
 #[derive(Default)]
 pub struct Registry {
     pending: Mutex<HashMap<String, Slot>>,
+    inflight: std::sync::atomic::AtomicUsize,
 }
 
 impl Registry {
+    pub fn active(&self) -> usize {
+        self.inflight.load(Ordering::Relaxed)
+    }
+    fn enter(&self) {
+        self.inflight.fetch_add(1, Ordering::Relaxed);
+    }
+    fn leave(&self) {
+        self.inflight.fetch_sub(1, Ordering::Relaxed);
+    }
     fn register(&self, token: &str) -> Slot {
         let slot = Slot::new();
         self.pending.lock().unwrap().insert(token.to_string(), slot.clone());
@@ -186,6 +196,7 @@ impl FileChooser {
         options: HashMap<String, OwnedValue>,
     ) -> (u32, HashMap<String, OwnedValue>) {
         let token = format!("portal-{}", NEXT_TOKEN.fetch_add(1, Ordering::Relaxed));
+        self.ctx.portal.enter();
         let slot = self.ctx.portal.register(&token);
 
         let req_obj = PortalRequest { ctx: self.ctx.clone(), token: token.clone(), slot: slot.clone() };
@@ -237,6 +248,7 @@ impl FileChooser {
         let _ = self.conn.object_server().remove::<PortalRequest, _>(&handle).await;
 
         if !reply.ok || reply.paths.is_empty() {
+            self.ctx.portal.leave();
             return (1, HashMap::new());
         }
 
@@ -258,6 +270,7 @@ impl FileChooser {
                 }
             }
         }
+        self.ctx.portal.leave();
         (0, results)
     }
 }
@@ -451,6 +464,18 @@ fn launcher_path() -> Option<PathBuf> {
 }
 
 fn reload_xdg_portal() {
+    // Tell the session bus to rescan ~/.local/share/dbus-1/services so the new .service file is activatable at once.
+    if util::which("busctl").is_some() {
+        let _ = util::run_status(
+            "busctl",
+            &["--user", "call", "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "ReloadConfig"],
+        );
+    } else if util::which("dbus-send").is_some() {
+        let _ = util::run_status(
+            "dbus-send",
+            &["--session", "--type=method_call", "--dest=org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus.ReloadConfig"],
+        );
+    }
     if util::which("systemctl").is_some() {
         let _ = util::run_status("systemctl", &["--user", "daemon-reload"]);
         let _ = util::run_status("systemctl", &["--user", "restart", "xdg-desktop-portal.service"]);
@@ -569,6 +594,22 @@ pub fn portal_set(req: &Value) -> Result<Value, String> {
             format!("inir-files;{fallback}")
         };
         write_filechooser_value(&conf, Some(&next))?;
+
+        // When XDG_DESKTOP_PORTAL_DIR is set, xdg-desktop-portal looks for *-portals.conf inside that directory too:
+        // mirror every user portals.conf into pdir so ScreenCast/Screenshot/FileChooser preferences are all respected.
+        if let Some(conf_dir) = conf.parent() {
+            if let Ok(rd) = fs::read_dir(conf_dir) {
+                for de in rd.flatten() {
+                    let name = de.file_name();
+                    if !name.to_string_lossy().ends_with(".conf") {
+                        continue;
+                    }
+                    let dst = pdir.join(&name);
+                    let _ = fs::remove_file(&dst);
+                    let _ = std::os::unix::fs::symlink(de.path(), &dst);
+                }
+            }
+        }
         reload_xdg_portal();
     } else {
         // Restore the user's exact previous FileChooser value (including deleting the line if previous was null).
@@ -587,6 +628,13 @@ pub fn portal_set(req: &Value) -> Result<Value, String> {
         let _ = fs::remove_file(&dropin);
         let _ = fs::remove_file(&dbus_svc);
         let _ = fs::remove_file(&pfile);
+        if let Ok(rd) = fs::read_dir(&pdir) {
+            for de in rd.flatten() {
+                if de.file_name().to_string_lossy().ends_with(".conf") {
+                    let _ = fs::remove_file(de.path());
+                }
+            }
+        }
         reload_xdg_portal();
     }
 

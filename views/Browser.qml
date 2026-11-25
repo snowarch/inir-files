@@ -198,23 +198,22 @@ FloatingWindow {
     }
     function closeWindow(): void {
         if (root.chooser) {
-            root.replyChooser(false, [])
-            root.closeRequested()
+            root.replyChooser(false, [], () => root.closeRequested())
             return
         }
         saveTabs.stop()
         saveTabs.triggered()
         root.closeRequested()
     }
-    function replyChooser(ok: bool, paths: var): void {
-        if (!root.chooser || root.chooserAnswered) return
+    function replyChooser(ok: bool, paths: var, done: var): void {
+        if (!root.chooser || root.chooserAnswered) { if (done) done(); return }
         root.chooserAnswered = true
         Core.call("chooser_reply", {
             token: root.chooser.token ?? "",
             ok: ok,
             paths: paths ?? [],
             filterIndex: root.chooserFilterIdx
-        })
+        }, () => { if (done) done() })
     }
     function chooserReady(): bool {
         if (!root.chooser || !root.activePane) return false
@@ -231,26 +230,22 @@ FloatingWindow {
         if (root.chooser.kind === "save") {
             const name = root.chooserSaveName.trim()
             if (f.mode !== "folder" || name.length === 0) return
-            root.replyChooser(true, [Fmt.join(f.path, name)])
-            root.closeRequested()
+            root.replyChooser(true, [Fmt.join(f.path, name)], () => root.closeRequested())
             return
         }
         if (root.chooser.directory) {
             const dirs = f.chosen().filter(e => e.dir)
             const picked = dirs.length === 1 ? [dirs[0].path] : (f.mode === "folder" ? [f.path] : [])
             if (picked.length === 0) return
-            root.replyChooser(true, picked)
-            root.closeRequested()
+            root.replyChooser(true, picked, () => root.closeRequested())
             return
         }
         const files = f.chosen().filter(e => !e.dir).map(e => e.path)
         if (files.length === 0) return
-        root.replyChooser(true, root.chooser.multiple ? files : [files[0]])
-        root.closeRequested()
+        root.replyChooser(true, root.chooser.multiple ? files : [files[0]], () => root.closeRequested())
     }
     function cancelChooser(): void {
-        root.replyChooser(false, [])
-        root.closeRequested()
+        root.replyChooser(false, [], () => root.closeRequested())
     }
     function applyChooserFilter(idx: int): void {
         root.chooserFilterIdx = idx
