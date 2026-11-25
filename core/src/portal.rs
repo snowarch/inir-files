@@ -136,7 +136,7 @@ fn bool_option(options: &HashMap<String, OwnedValue>, key: &str) -> bool {
 }
 
 fn filters_option(options: &HashMap<String, OwnedValue>) -> (Vec<FilterSpec>, usize) {
-    let raw: Vec<FilterSpec> = options
+    let mut raw: Vec<FilterSpec> = options
         .get("filters")
         .and_then(|v| v.try_clone().ok())
         .and_then(|v| Vec::<FilterSpec>::try_from(v).ok())
@@ -145,6 +145,11 @@ fn filters_option(options: &HashMap<String, OwnedValue>) -> (Vec<FilterSpec>, us
         .get("current_filter")
         .and_then(|v| v.try_clone().ok())
         .and_then(|v| FilterSpec::try_from(v).ok());
+    if raw.is_empty() {
+        if let Some(c) = cur.clone() {
+            raw.push(c);
+        }
+    }
     let cur_idx = cur
         .as_ref()
         .and_then(|c| raw.iter().position(|f| f == c))
@@ -474,18 +479,25 @@ pub fn portal_set(req: &Value) -> Result<Value, String> {
     if enable {
         let bin = launcher_path().ok_or("nolauncher")?;
 
-        // 1. User portals dir: mirror every system *.portal so gnome/gtk/kde/umbriel stay intact, plus inir-files.portal.
+        // 1. User portals dir: mirror every installed *.portal (user, /usr/local, /usr) so gnome/gtk/kde/umbriel stay intact.
         fs::create_dir_all(&pdir).map_err(|e| e.to_string())?;
-        if let Ok(rd) = fs::read_dir("/usr/share/xdg-desktop-portal/portals") {
-            for de in rd.flatten() {
-                let name = de.file_name();
-                let name_s = name.to_string_lossy();
-                if !name_s.ends_with(".portal") || name_s == "inir-files.portal" {
-                    continue;
-                }
-                let dst = pdir.join(&name);
-                if dst.symlink_metadata().is_err() {
-                    let _ = std::os::unix::fs::symlink(de.path(), &dst);
+        let mirror_dirs = [
+            util::data_home().join("xdg-desktop-portal/portals"),
+            PathBuf::from("/usr/local/share/xdg-desktop-portal/portals"),
+            PathBuf::from("/usr/share/xdg-desktop-portal/portals"),
+        ];
+        for mdir in &mirror_dirs {
+            if let Ok(rd) = fs::read_dir(mdir) {
+                for de in rd.flatten() {
+                    let name = de.file_name();
+                    let name_s = name.to_string_lossy();
+                    if !name_s.ends_with(".portal") || name_s == "inir-files.portal" {
+                        continue;
+                    }
+                    let dst = pdir.join(&name);
+                    if dst.symlink_metadata().is_err() {
+                        let _ = std::os::unix::fs::symlink(de.path(), &dst);
+                    }
                 }
             }
         }
@@ -514,12 +526,12 @@ pub fn portal_set(req: &Value) -> Result<Value, String> {
             }
             fs::write(
                 &dropin,
-                format!("[Service]\nEnvironment=XDG_DESKTOP_PORTAL_DIR={}\n", pdir.to_string_lossy()),
+                format!("[Service]\nEnvironment=\"XDG_DESKTOP_PORTAL_DIR={}\"\n", pdir.to_string_lossy()),
             )
             .map_err(|e| e.to_string())?;
         }
 
-        // 4. Back up the user's exact previous FileChooser line (never overwrite backup if already set to inir-files).
+        // 4. Back up the user's exact previous FileChooser line (never overwrite an existing backup).
         let current = read_filechooser_value(&conf);
         let already = current
             .as_deref()
@@ -535,17 +547,19 @@ pub fn portal_set(req: &Value) -> Result<Value, String> {
                 .collect::<Vec<_>>()
                 .join(";")
         } else {
-            if let Some(parent) = backup.parent() {
-                let _ = fs::create_dir_all(parent);
+            if !backup.exists() {
+                if let Some(parent) = backup.parent() {
+                    let _ = fs::create_dir_all(parent);
+                }
+                let _ = fs::write(
+                    &backup,
+                    serde_json::to_string_pretty(&json!({
+                        "conf": conf.to_string_lossy(),
+                        "previous": current,
+                    }))
+                    .unwrap_or_default(),
+                );
             }
-            let _ = fs::write(
-                &backup,
-                serde_json::to_string_pretty(&json!({
-                    "conf": conf.to_string_lossy(),
-                    "previous": current,
-                }))
-                .unwrap_or_default(),
-            );
             current.unwrap_or_default()
         };
 
@@ -557,16 +571,17 @@ pub fn portal_set(req: &Value) -> Result<Value, String> {
         write_filechooser_value(&conf, Some(&next))?;
         reload_xdg_portal();
     } else {
-        // Restore the user's exact previous FileChooser value (or strip inir-files; fallback cleanly).
-        let restored: Option<String> = fs::read_to_string(&backup)
-            .ok()
-            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-            .and_then(|v| v.get("previous").and_then(|p| p.as_str()).map(str::to_string))
-            .or_else(|| {
-                let cur = read_filechooser_value(&conf)?;
+        // Restore the user's exact previous FileChooser value (including deleting the line if previous was null).
+        let restored: Option<String> = if let Ok(s) = fs::read_to_string(&backup) {
+            serde_json::from_str::<Value>(&s)
+                .ok()
+                .and_then(|v| v.get("previous").and_then(|p| p.as_str()).map(str::to_string))
+        } else {
+            read_filechooser_value(&conf).and_then(|cur| {
                 let rest: Vec<&str> = cur.split(';').map(str::trim).filter(|s| !s.is_empty() && *s != "inir-files").collect();
                 (!rest.is_empty()).then(|| rest.join(";"))
-            });
+            })
+        };
         write_filechooser_value(&conf, restored.as_deref())?;
         let _ = fs::remove_file(&backup);
         let _ = fs::remove_file(&dropin);

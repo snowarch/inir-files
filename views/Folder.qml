@@ -312,8 +312,8 @@ Item {
         return qi === q.length
     }
     function globToRe(pat: string): var {
-        const body = pat.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")
-        return new RegExp("^" + body + "$", "i")
+        const body = pat.replace(/[.+^${}()|\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")
+        try { return new RegExp("^" + body + "$", "i") } catch (e) { return new RegExp("^" + pat.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i") }
     }
     function matchesPortal(e: var, rules: var): bool {
         if (!rules || rules.length === 0 || e.dir) return true
