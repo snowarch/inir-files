@@ -26,7 +26,7 @@ iNiR Files is a companion app of [iNiR](https://inir.space), not a hard-coupled 
 
 - **Live visual sync:** Watches iNiR's generated `app-palette.json`, `app-look.json` and `theme-meta.json` (and falls back cleanly to neutral graphite + blue accent when run without iNiR). Scheme, wallpaper tint strength, font family, title/mono fonts, scale and corner rounding update live with zero restart.
 - **Wallpaper integration:** Sets any image or video directly as the desktop wallpaper over iNiR's IPC.
-- **Shared runtime:** Runs exclusively on `qs-rs`, the iNiR QML runtime, and serves `org.freedesktop.FileManager1` on D-Bus so browsers and desktop apps open "Show in folder" directly in iNiR Files.
+- **Shared runtime:** Runs exclusively on `qs-rs`, the iNiR QML runtime, serves `org.freedesktop.FileManager1` on D-Bus for "Show in folder", and ships a native `org.freedesktop.impl.portal.FileChooser` backend (toggleable in Settings with automatic backup and restore of your previous picker) for Open/Save dialogs in Discord, Firefox, Chrome and Electron apps.
 
 ## Aesthetic & design principles
 

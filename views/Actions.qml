@@ -158,6 +158,11 @@ Item {
         const f = pane.folder
         if (!list || list.length === 0) return
         if (f.mode === "trash") { root.browser.quickLook.toggle(pane); return }
+        if (root.browser.chooser) {
+            if (list.length === 1 && list[0].dir) { f.go(list[0].path); return }
+            if (!root.browser.chooser.directory) root.browser.acceptChooser()
+            return
+        }
         const dirs = list.filter(e => e.dir)
         const files = list.filter(e => !e.dir)
         if (dirs.length === 1 && files.length === 0) { f.go(dirs[0].path); return }

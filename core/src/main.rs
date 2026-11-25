@@ -11,6 +11,7 @@ mod list;
 mod markdown;
 mod mime;
 mod places;
+mod portal;
 mod remote;
 mod search;
 mod thumbs;
@@ -52,6 +53,7 @@ pub struct Ctx {
     pub jobs: jobs::Registry,
     pub watch: watch::Watch,
     pub talks: remote::Talks,
+    pub portal: portal::Registry,
     cancels: Mutex<HashMap<String, Arc<AtomicBool>>>,
 }
 
@@ -196,6 +198,9 @@ fn handle(ctx: &Arc<Ctx>, req: Value) {
         "set_default" => apps::set_default(&req),
         "default_fm_get" => apps::default_fm_get(),
         "default_fm_set" => apps::default_fm_set(&req),
+        "portal_get" => portal::portal_get(),
+        "portal_set" => portal::portal_set(&req),
+        "chooser_reply" => ctx.portal.answer(&req),
         "terminal" => apps::terminal(&req),
         "run" => apps::run(&req),
         "wallpaper" => apps::wallpaper(&req),
@@ -215,12 +220,14 @@ fn main() {
         jobs: jobs::Registry::default(),
         watch: watch::Watch::default(),
         talks: remote::Talks::default(),
+        portal: portal::Registry::default(),
         cancels: Mutex::new(HashMap::new()),
     });
     thumbs::start(ctx.clone());
     watch::start(ctx.clone());
     ctx.out.event("ready", json!({"version": env!("CARGO_PKG_VERSION"), "pid": std::process::id(), "home": util::home().to_string_lossy()}));
     fm1::start(ctx.clone());
+    portal::start(ctx.clone());
     for line in std::io::stdin().lock().lines() {
         let Ok(line) = line else { break };
         if line.trim().is_empty() {

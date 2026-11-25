@@ -39,12 +39,18 @@ install: build
 	sed 's|^Exec=.*|Exec=$(EXEC_PATH) --service|' data/inir-files.FileManager1.service \
 		> "$(DESTDIR)$(DATADIR)/dbus-1/services/inir-files.FileManager1.service"
 	chmod 644 "$(DESTDIR)$(DATADIR)/dbus-1/services/inir-files.FileManager1.service"
+	sed 's|^Exec=.*|Exec=$(EXEC_PATH) --service|' data/org.freedesktop.impl.portal.desktop.inir-files.service \
+		> "$(DESTDIR)$(DATADIR)/dbus-1/services/org.freedesktop.impl.portal.desktop.inir-files.service"
+	chmod 644 "$(DESTDIR)$(DATADIR)/dbus-1/services/org.freedesktop.impl.portal.desktop.inir-files.service"
+	install -Dm644 data/inir-files.portal "$(DESTDIR)$(DATADIR)/xdg-desktop-portal/portals/inir-files.portal"
 
 uninstall:
 	rm -f "$(DESTDIR)$(BINDIR)/inir-files"
 	rm -f "$(DESTDIR)$(LIBEXECDIR)/inir-files-core"
 	rm -f "$(DESTDIR)$(DATADIR)/applications/inir-files.desktop"
 	rm -f "$(DESTDIR)$(DATADIR)/dbus-1/services/inir-files.FileManager1.service"
+	rm -f "$(DESTDIR)$(DATADIR)/dbus-1/services/org.freedesktop.impl.portal.desktop.inir-files.service"
+	rm -f "$(DESTDIR)$(DATADIR)/xdg-desktop-portal/portals/inir-files.portal"
 	rm -rf "$(DESTDIR)$(APPDIR)"
 
 dist: build

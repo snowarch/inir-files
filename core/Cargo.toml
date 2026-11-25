@@ -21,8 +21,9 @@ md-5 = "0.10"
 sha2 = "0.10"
 percent-encoding = "2"
 pulldown-cmark = { version = "0.13", default-features = false }
-# org.freedesktop.FileManager1: the same D-Bus crate as qs-rs, pure Rust.
+# org.freedesktop.FileManager1 and org.freedesktop.impl.portal.FileChooser: pure Rust D-Bus.
 zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
+async-io = "2"
 
 [profile.release]
 opt-level = 3

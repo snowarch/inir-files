@@ -223,6 +223,7 @@ FocusScope {
             if (root.filterOpen || f.filterText.length > 0) root.closeFilter()
             else if (f.mode === "search") root.browser.head.clearSearch()
             else if (f.selCount > 0) f.clearSel()
+            else if (root.browser.chooser) root.browser.cancelChooser()
             event.accepted = true
             return
         }

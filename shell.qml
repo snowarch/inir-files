@@ -15,16 +15,33 @@ ShellRoot {
     id: root
     property int serial: 0
 
-    // A window at path; chosen: the entries to choose there; props: their properties open over it.
-    function open(path: string, chosen: var, props: var): void {
+    // A window at path; chosen: the entries to choose there; props: their properties open over it; chooser: portal req.
+    function open(path: string, chosen: var, props: var, chooser: var): void {
         root.serial++
-        windows.append({ key: root.serial, path: path ?? "", chosen: JSON.stringify(chosen ?? []), props: props === true, first: root.serial === 1 })
+        windows.append({
+            key: root.serial,
+            path: path ?? "",
+            chosen: JSON.stringify(chosen ?? []),
+            props: props === true,
+            chooserJson: chooser ? JSON.stringify(chooser) : "",
+            chooserToken: chooser ? String(chooser.token ?? "") : "",
+            first: root.serial === 1 && !chooser
+        })
     }
     function forget(key: int): void {
         for (let i = 0; i < windows.count; i++) {
             if (windows.get(i).key === key) { windows.remove(i); break }
         }
         if (windows.count === 0) {
+            Prefs.flush()
+            Qt.quit()
+        }
+    }
+    function cancelChooser(token: string): void {
+        for (let i = 0; i < windows.count; i++) {
+            if (windows.get(i).chooserToken === token) { windows.remove(i); break }
+        }
+        if (windows.count === 0 && Quickshell.env("INIR_FILES_SERVICE") !== "1") {
             Prefs.flush()
             Qt.quit()
         }
@@ -52,6 +69,13 @@ ShellRoot {
             }
             for (const d in by) root.open(d, by[d], how === "properties")
         }
+        function onChooserRequested(req: var): void {
+            const dir = req.folder && req.folder.length > 0 ? req.folder : Core.home
+            root.open(dir, [], false, req)
+        }
+        function onChooserCancelled(token: string): void {
+            root.cancelChooser(token)
+        }
     }
 
     ListModel { id: windows }
@@ -63,9 +87,11 @@ ShellRoot {
             required property bool first
             required property string chosen
             required property bool props
+            required property string chooserJson
             startPath: path
             startChosen: JSON.parse(chosen)
             startProps: props
+            chooser: chooserJson.length > 0 ? JSON.parse(chooserJson) : null
             restoreTabs: first
             visible: true
             onNewWindowRequested: p => root.open(p)

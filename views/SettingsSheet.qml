@@ -9,7 +9,11 @@ Sheet {
     cardWidth: Theme.dp(560)
     title: I18n.tr("Settings")
     property bool isDefaultFm: false
-    Component.onCompleted: Core.call("default_fm_get", {}, r => { if (root && r.ok) root.isDefaultFm = r.default === true })
+    property bool portalEnabled: false
+    Component.onCompleted: {
+        Core.call("default_fm_get", {}, r => { if (root && r.ok) root.isDefaultFm = r.default === true })
+        Core.call("portal_get", {}, r => { if (root && r.ok) root.portalEnabled = r.enabled === true })
+    }
 
     component Setting: Item {
         id: s
@@ -135,6 +139,18 @@ Sheet {
                         onToggled: value => Core.call("default_fm_set", { enable: value }, r => {
                             if (!root) return
                             if (r.ok) root.isDefaultFm = r.default === true
+                            else Toast.fail(Errors.text(r.error))
+                        })
+                    }
+                }
+                Setting {
+                    label: I18n.tr("System file picker")
+                    hint: I18n.tr("Use iNiR Files for Open and Save dialogs in apps like Discord and Firefox. Off restores your previous picker.")
+                    Toggle {
+                        checked: root.portalEnabled
+                        onToggled: value => Core.call("portal_set", { enable: value }, r => {
+                            if (!root) return
+                            if (r.ok) root.portalEnabled = r.enabled === true
                             else Toast.fail(Errors.text(r.error))
                         })
                     }

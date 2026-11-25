@@ -12,10 +12,17 @@ FloatingWindow {
     // The entries to choose in the first tab, and their properties shown at once.
     property var startChosen: []
     property bool startProps: false
+    // Non-null when opened by xdg-desktop-portal (org.freedesktop.impl.portal.FileChooser).
+    property var chooser: null
+    property int chooserFilterIdx: 0
+    property bool chooserAnswered: false
+    property string chooserSaveName: ""
     signal newWindowRequested(string path)
     signal closeRequested()
 
-    title: (root.currentPage ? root.currentPage.title + " — " : "") + I18n.tr("Files")
+    title: root.chooser
+        ? (root.chooser.title || (root.chooser.kind === "save" ? I18n.tr("Save file") : root.chooser.directory ? I18n.tr("Select folder") : I18n.tr("Open file")))
+        : (root.currentPage ? root.currentPage.title + " — " : "") + I18n.tr("Files")
     color: Theme.rail
     // The size is the window's own, never the density's: it opens as it was last left, and only the person or the
     // compositor changes it.
@@ -190,9 +197,77 @@ FloatingWindow {
         else w.showMaximized()
     }
     function closeWindow(): void {
+        if (root.chooser) {
+            root.replyChooser(false, [])
+            root.closeRequested()
+            return
+        }
         saveTabs.stop()
         saveTabs.triggered()
         root.closeRequested()
+    }
+    function replyChooser(ok: bool, paths: var): void {
+        if (!root.chooser || root.chooserAnswered) return
+        root.chooserAnswered = true
+        Core.call("chooser_reply", {
+            token: root.chooser.token ?? "",
+            ok: ok,
+            paths: paths ?? [],
+            filterIndex: root.chooserFilterIdx
+        })
+    }
+    function chooserReady(): bool {
+        if (!root.chooser || !root.activePane) return false
+        const f = root.activePane.folder
+        void f.selRev
+        if (root.chooser.kind === "save") return f.mode === "folder" && root.chooserSaveName.trim().length > 0
+        if (root.chooser.directory) return f.mode === "folder"
+        const chosen = f.chosen().filter(e => !e.dir)
+        return chosen.length > 0
+    }
+    function acceptChooser(): void {
+        if (!root.chooser || !root.activePane) return
+        const f = root.activePane.folder
+        if (root.chooser.kind === "save") {
+            const name = root.chooserSaveName.trim()
+            if (f.mode !== "folder" || name.length === 0) return
+            root.replyChooser(true, [Fmt.join(f.path, name)])
+            root.closeRequested()
+            return
+        }
+        if (root.chooser.directory) {
+            const dirs = f.chosen().filter(e => e.dir)
+            const picked = dirs.length === 1 ? [dirs[0].path] : (f.mode === "folder" ? [f.path] : [])
+            if (picked.length === 0) return
+            root.replyChooser(true, picked)
+            root.closeRequested()
+            return
+        }
+        const files = f.chosen().filter(e => !e.dir).map(e => e.path)
+        if (files.length === 0) return
+        root.replyChooser(true, root.chooser.multiple ? files : [files[0]])
+        root.closeRequested()
+    }
+    function cancelChooser(): void {
+        root.replyChooser(false, [])
+        root.closeRequested()
+    }
+    function applyChooserFilter(idx: int): void {
+        root.chooserFilterIdx = idx
+        const flist = root.chooser?.filters ?? []
+        const rules = idx >= 0 && idx < flist.length ? (flist[idx].rules ?? []) : null
+        for (const page of root.tabs) {
+            if (page?.activePane?.folder) page.activePane.folder.portalFilter = rules
+        }
+    }
+    Component.onDestruction: if (root.chooser && !root.chooserAnswered) root.replyChooser(false, [])
+    // In Save mode, clicking an existing file fills the filename field for quick overwrite/edit.
+    Connections {
+        target: root.chooser && root.chooser.kind === "save" && root.activePane ? root.activePane.folder : null
+        function onSelRevChanged() {
+            const c = root.activePane.folder.chosen()
+            if (c.length === 1 && !c[0].dir) root.chooserSaveName = c[0].name
+        }
     }
     // A sheet over the window; the pane takes the keys again once it goes.
     function sheet(component: Component, props: var): var {
@@ -205,6 +280,13 @@ FloatingWindow {
     Component.onCompleted: {
         const size = Prefs.recall("window", null)
         if (size && size.w >= 560 && size.h >= 400) { root.implicitWidth = size.w; root.implicitHeight = size.h }
+        if (root.chooser) {
+            root.chooserSaveName = root.chooser.name ?? ""
+            root.chooserFilterIdx = root.chooser.currentFilter ?? 0
+            root.newTab(root.startPath || Core.home, [])
+            Qt.callLater(() => root.applyChooserFilter(root.chooserFilterIdx))
+            return
+        }
         const saved = root.restoreTabs && root.startPath.length === 0 && Prefs.get("restoreTabs") ? Prefs.recall("tabs", null) : null
         if (saved && saved.paths && saved.paths.length > 0) {
             for (const p of saved.paths) root.newTab(p)
@@ -272,8 +354,99 @@ FloatingWindow {
             Item {
                 id: pages
                 anchors.top: filters.bottom
+                anchors.bottom: chooserBar.visible ? chooserBar.top : status.top
+                width: parent.width
+            }
+            // Portal FileChooser action bar (shown only when opened by an app via xdg-desktop-portal).
+            Item {
+                id: chooserBar
+                visible: !!root.chooser
                 anchors.bottom: status.top
                 width: parent.width
+                height: visible ? Theme.dp(54) : 0
+                Rectangle { width: parent.width; height: 1; color: Theme.line }
+                Row {
+                    anchors.left: parent.left
+                    anchors.leftMargin: Theme.dp(14)
+                    anchors.right: chooserBtns.left
+                    anchors.rightMargin: Theme.dp(12)
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.dp(10)
+                    Field {
+                        id: saveField
+                        visible: !!root.chooser && root.chooser.kind === "save"
+                        width: Math.min(Theme.dp(340), Math.max(Theme.dp(160), parent.width - (filterBtn.visible ? filterBtn.width + Theme.dp(12) : 0)))
+                        glyph: "edit"
+                        placeholder: I18n.tr("File name")
+                        text: root.chooserSaveName
+                        onEdited: root.chooserSaveName = text
+                        onAccepted: root.acceptChooser()
+                        onEscaped: root.cancelChooser()
+                    }
+                    Pill {
+                        id: filterBtn
+                        visible: !!root.chooser && (root.chooser.filters ?? []).length > 0
+                        compact: true
+                        glyph: "filter_alt"
+                        text: {
+                            const fl = root.chooser?.filters ?? []
+                            return root.chooserFilterIdx >= 0 && root.chooserFilterIdx < fl.length ? (fl[root.chooserFilterIdx].label || I18n.tr("Filter")) : I18n.tr("All files")
+                        }
+                        onClicked: {
+                            const fl = root.chooser?.filters ?? []
+                            const entries = fl.map((f, idx) => ({
+                                text: f.label || I18n.tr("Filter"),
+                                checked: root.chooserFilterIdx === idx,
+                                run: () => root.applyChooserFilter(idx)
+                            }))
+                            entries.push({ text: I18n.tr("All files"), checked: root.chooserFilterIdx < 0, run: () => root.applyChooserFilter(-1) })
+                            root.menus.openAt(entries, filterBtn, true)
+                        }
+                    }
+                    Txt {
+                        visible: !saveField.visible
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.max(Theme.dp(40), parent.width - (filterBtn.visible ? filterBtn.width + Theme.dp(12) : 0))
+                        elide: Text.ElideMiddle
+                        size: Theme.small
+                        color: Theme.ink2
+                        text: {
+                            if (!root.chooser || !root.activePane) return ""
+                            const f = root.activePane.folder
+                            void f.selRev
+                            if (root.chooser.directory) {
+                                const dirs = f.chosen().filter(e => e.dir)
+                                return dirs.length === 1 ? dirs[0].name : Fmt.pretty(f.path)
+                            }
+                            const files = f.chosen().filter(e => !e.dir)
+                            if (files.length === 0) return root.chooser.multiple ? I18n.tr("Choose one or more files") : I18n.tr("Choose a file")
+                            return files.length === 1 ? files[0].name : I18n.n("%1 file chosen", "%1 files chosen", files.length)
+                        }
+                    }
+                }
+                Row {
+                    id: chooserBtns
+                    anchors.right: parent.right
+                    anchors.rightMargin: Theme.dp(14)
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.dp(8)
+                    Pill {
+                        text: I18n.tr("Cancel")
+                        kind: "plain"
+                        onClicked: root.cancelChooser()
+                    }
+                    Pill {
+                        kind: "solid"
+                        enabled: root.chooserReady()
+                        text: {
+                            const custom = (root.chooser?.acceptLabel ?? "").replace(/_/g, "").trim()
+                            if (custom.length > 0) return custom
+                            if (root.chooser?.kind === "save") return I18n.tr("Save")
+                            return root.chooser?.directory ? I18n.tr("Select") : I18n.tr("Open")
+                        }
+                        onClicked: root.acceptChooser()
+                    }
+                }
             }
             Status {
                 id: status

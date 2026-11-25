@@ -35,6 +35,9 @@ Singleton {
     signal asked(var ask)
     // "Show in folder" from another app (org.freedesktop.FileManager1): how is "items", "folders" or "properties".
     signal showRequested(string how, var paths)
+    // XDG Desktop Portal FileChooser request (Discord, Firefox, Chrome, etc.).
+    signal chooserRequested(var req)
+    signal chooserCancelled(string token)
 
     function call(op: string, args: var, done: var): int {
         const id = root.nextId++
@@ -222,6 +225,8 @@ Singleton {
         case "places": root.places = m; break
         case "ask": root.asked(m); break
         case "show": root.showRequested(m.how, m.paths ?? []); break
+        case "chooser": root.chooserRequested(m); break
+        case "chooser_cancel": root.chooserCancelled(m.token ?? ""); break
         }
     }
 

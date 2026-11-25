@@ -14,6 +14,8 @@ Item {
     property var all: []
     property var rawAll: []
     property string filterText: ""
+    // Portal FileChooser filter rules: [{ type: 0 (glob) | 1 (mime), pattern: "*.png" }]. Folders always stay visible.
+    property var portalFilter: null
     property var at: ({})
     property bool loading: false
     property string error: ""
@@ -190,7 +192,8 @@ Item {
         let list = root.rows(r.entries)
         if (root.mode !== "folder" && !root.showHidden) list = list.filter(e => !e.hidden || root.mode === "trash")
         root.rawAll = list
-        if (root.mode !== "search" && root.mode !== "start" && root.filterText.trim().length > 0) list = root.filterList(list, root.filterText)
+        if (root.mode !== "search" && root.mode !== "start" && (root.filterText.trim().length > 0 || (root.portalFilter && root.portalFilter.length > 0)))
+            list = root.filterList(list, root.filterText)
         if (keep) root.merge(list)
         else {
             root.all = list
@@ -308,12 +311,30 @@ Item {
         for (let i = 0; i < a.length && qi < q.length; i++) if (a[i] === q[qi]) qi++
         return qi === q.length
     }
+    function globToRe(pat: string): var {
+        const body = pat.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")
+        return new RegExp("^" + body + "$", "i")
+    }
+    function matchesPortal(e: var, rules: var): bool {
+        if (!rules || rules.length === 0 || e.dir) return true
+        for (let i = 0; i < rules.length; i++) {
+            const r = rules[i]
+            if (r.pattern === "*" || r.pattern === "*/*" || r.pattern === "application/octet-stream") return true
+            if (r.type === 1) {
+                if (r.pattern.endsWith("/*")) { if ((e.mime ?? "").startsWith(r.pattern.slice(0, -1))) return true }
+                else if (e.mime === r.pattern) return true
+            } else {
+                if (root.globToRe(r.pattern).test(e.name)) return true
+            }
+        }
+        return false
+    }
     function filterList(list: var, text: string): var {
         const q = root.foldStr(text.trim())
-        if (q.length === 0) return list
-        return list.filter(e => root.matchesFilter(e.name, q))
+        const pf = root.portalFilter
+        return list.filter(e => root.matchesPortal(e, pf) && (q.length === 0 || root.matchesFilter(e.name, q)))
     }
-    onFilterTextChanged: {
+    function refreshFilter(): void {
         if (root.mode === "search" || root.mode === "start") return
         const next = root.filterList(root.rawAll, root.filterText)
         root.all = next
@@ -325,6 +346,8 @@ Item {
         root.reset()
         root.applied()
     }
+    onFilterTextChanged: root.refreshFilter()
+    onPortalFilterChanged: root.refreshFilter()
 
     // ---- search below the folder on screen
     function search(text: string): void {
