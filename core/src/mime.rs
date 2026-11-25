@@ -98,6 +98,10 @@ impl MimeDb {
                 db.aliases.insert(a.to_string(), b.to_string());
             }
         }
+        // Older shared-mime-info (e.g. Ubuntu 24.04) ships application/x-shellscript without aliasing text/x-shellscript.
+        if !db.aliases.contains_key("text/x-shellscript") && !db.aliases.contains_key("application/x-shellscript") {
+            db.aliases.insert("text/x-shellscript".into(), "application/x-shellscript".into());
+        }
         for line in lines("subclasses") {
             if let Some((a, b)) = line.split_once(' ') {
                 db.parents.entry(a.to_string()).or_default().push(b.to_string());
