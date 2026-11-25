@@ -342,12 +342,21 @@ pub fn set_default(req: &Value) -> Result<Value, String> {
             out.push('\n');
             continue;
         }
-        if section == "[Default Applications]" && t.split_once('=').map(|(k, _)| k == mime).unwrap_or(false) {
-            if !written {
-                out.push_str(&format!("{mime}={app};\n"));
-                written = true;
+        if section == "[Default Applications]" {
+            if let Some((k, v)) = t.split_once('=') {
+                if k.trim() == mime {
+                    if !written {
+                        let rest: Vec<&str> = v.split(';').map(str::trim).filter(|s| !s.is_empty() && *s != app).collect();
+                        if rest.is_empty() {
+                            out.push_str(&format!("{mime}={app};\n"));
+                        } else {
+                            out.push_str(&format!("{mime}={app};{};\n", rest.join(";")));
+                        }
+                        written = true;
+                    }
+                    continue;
+                }
             }
-            continue;
         }
         out.push_str(line);
         out.push('\n');
@@ -395,7 +404,7 @@ fn mime_default_for(mime: &str) -> Option<String> {
         if in_def {
             if let Some((k, v)) = t.split_once('=') {
                 if k.trim() == mime {
-                    return v.split(';').next().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+                    return v.split(';').map(str::trim).find(|s| !s.is_empty()).map(str::to_string);
                 }
             }
         }

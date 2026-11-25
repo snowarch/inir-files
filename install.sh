@@ -73,9 +73,11 @@ rm -rf "$DIR"
 mv "${DIR}.new" "$DIR"
 
 PREV="$(readlink "${BASE}/current" 2>/dev/null || true)"
+PREV="${PREV##*/}"
 ln -sfn "$VERSION" "${BASE}/current"
 for old in "${BASE}"/*/; do
     [ -d "$old" ] || continue
+    old="${old%/}"
     name="$(basename "$old")"
     if [ "$name" != "$VERSION" ] && [ "$name" != "$PREV" ] && [ "$name" != "current" ]; then
         rm -rf "$old"
@@ -83,7 +85,10 @@ for old in "${BASE}"/*/; do
 done
 
 mkdir -p "$BIN_DIR" "${DATA_HOME}/applications"
-ln -sfn "${BASE}/current/bin/inir-files" "${BIN_DIR}/inir-files"
+if [ ! -e "${BIN_DIR}/inir-files" ] && [ ! -L "${BIN_DIR}/inir-files" ] \
+    || [ "$(readlink "${BIN_DIR}/inir-files" 2>/dev/null || true)" = "${BASE}/current/bin/inir-files" ]; then
+    ln -sfn "${BASE}/current/bin/inir-files" "${BIN_DIR}/inir-files"
+fi
 install -Dm644 "${BASE}/current/share/applications/inir-files.desktop" "${DATA_HOME}/applications/inir-files.desktop"
 
 if [ "$SET_DEFAULT" = true ]; then
