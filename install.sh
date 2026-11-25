@@ -93,6 +93,7 @@ if [ "$SET_DEFAULT" = true ]; then
         > "${DATA_HOME}/dbus-1/services/inir-files.FileManager1.service"
     chmod 644 "${DATA_HOME}/dbus-1/services/inir-files.FileManager1.service"
     if command -v xdg-mime >/dev/null 2>&1; then
+        mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}"
         xdg-mime default inir-files.desktop inode/directory || true
     fi
 fi
