@@ -367,6 +367,69 @@ pub fn set_default(req: &Value) -> Result<Value, String> {
     Ok(json!({}))
 }
 
+fn fm1_service_path() -> PathBuf {
+    util::data_home().join("dbus-1/services/inir-files.FileManager1.service")
+}
+
+fn launcher_path() -> Option<PathBuf> {
+    let local = util::home().join(".local/bin/inir-files");
+    if local.exists() {
+        return Some(local);
+    }
+    let prebuilt = util::data_home().join("inir/files/current/bin/inir-files");
+    if prebuilt.exists() {
+        return Some(prebuilt);
+    }
+    util::which("inir-files")
+}
+
+pub fn default_fm_get() -> Result<Value, String> {
+    let def = default_app("inode/directory").map(|s| s == "inir-files.desktop").unwrap_or(false);
+    let dbus = fm1_service_path().is_file();
+    Ok(json!({"default": def, "dbus": dbus}))
+}
+
+pub fn default_fm_set(req: &Value) -> Result<Value, String> {
+    let enable = req["enable"].as_bool().unwrap_or(false);
+    let svc = fm1_service_path();
+    if enable {
+        let bin = launcher_path().ok_or("nolauncher")?;
+        if let Some(parent) = svc.parent() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let body = format!("[D-BUS Service]\nName=org.freedesktop.FileManager1\nExec={} --service\n", bin.to_string_lossy());
+        let tmp = svc.with_extension("inir-tmp");
+        fs::write(&tmp, body).map_err(|e| e.to_string())?;
+        fs::rename(&tmp, &svc).map_err(|e| e.to_string())?;
+        set_default(&json!({"mime": "inode/directory", "app": "inir-files.desktop"}))?;
+    } else {
+        if svc.is_file() {
+            let _ = fs::remove_file(&svc);
+        }
+        let file = util::config_home().join("mimeapps.list");
+        if let Ok(text) = fs::read_to_string(&file) {
+            let mut out = String::new();
+            let mut in_def = false;
+            for line in text.lines() {
+                let t = line.trim();
+                if t.starts_with('[') {
+                    in_def = t == "[Default Applications]";
+                }
+                if in_def && t == "inode/directory=inir-files.desktop" {
+                    continue;
+                }
+                out.push_str(line);
+                out.push('\n');
+            }
+            let tmp = file.with_extension("inir-tmp");
+            if fs::write(&tmp, out).is_ok() {
+                let _ = fs::rename(&tmp, &file);
+            }
+        }
+    }
+    default_fm_get()
+}
+
 pub fn terminal(req: &Value) -> Result<Value, String> {
     let dir = PathBuf::from(req["dir"].as_str().unwrap_or(""));
     let mut argv = terminal_argv(req["terminal"].as_str().unwrap_or(""));

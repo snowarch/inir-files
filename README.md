@@ -112,7 +112,21 @@ Measured locally on Linux (x86_64):
 - **Remote mounts & secrets:** SFTP/SMB/FTP/WebDAV/NFS connections require `gio` and `gvfsd-fuse`; password storage depends on the desktop keyring.
 - **Hardware gestures:** Touchpad swipe and long-press touch menus are implemented and tested synthetically, not yet tuned across all laptop touchpads.
 
-## Build, install & package
+## Install, update & build
+
+### On iNiR (automatic, no commands needed)
+
+iNiR delivers and updates iNiR Files automatically via `inir update` (and `inir setup extras`). To make it your system-wide default file manager (including browser "Show in folder" links), flip **Settings → Default file manager** inside the app.
+
+### Standalone (prebuilt release, x86_64 & aarch64)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/snowarch/inir-files/main/install.sh | bash
+```
+
+Pass `--default` to also register it as the default folder handler and `org.freedesktop.FileManager1` service. Re-run the same command anytime to update atomically (or let `inir update` manage it).
+
+### From source
 
 ```sh
 # Build & run from checkout
@@ -121,7 +135,6 @@ bin/inir-files [PATH]...
 
 # Install for your user (no root needed)
 make install PREFIX="$HOME/.local"
-xdg-mime default inir-files.desktop inode/directory   # optional: default folder handler
 
 # Package a self-contained release tarball + SHA-256
 make dist

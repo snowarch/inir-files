@@ -194,6 +194,8 @@ fn handle(ctx: &Arc<Ctx>, req: Value) {
         "all_apps" => Ok(apps::all_apps_op()),
         "open" => apps::open(ctx, &req),
         "set_default" => apps::set_default(&req),
+        "default_fm_get" => apps::default_fm_get(),
+        "default_fm_set" => apps::default_fm_set(&req),
         "terminal" => apps::terminal(&req),
         "run" => apps::run(&req),
         "wallpaper" => apps::wallpaper(&req),

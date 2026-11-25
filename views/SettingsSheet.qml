@@ -8,6 +8,8 @@ Sheet {
     id: root
     cardWidth: Theme.dp(560)
     title: I18n.tr("Settings")
+    property bool isDefaultFm: false
+    Component.onCompleted: Core.call("default_fm_get", {}, r => { if (root && r.ok) root.isDefaultFm = r.default === true })
 
     component Setting: Item {
         id: s
@@ -123,6 +125,20 @@ Sheet {
 
                 Head { text: I18n.tr("Safety") }
                 Setting { label: I18n.tr("Ask before moving to the trash"); Switch { key: "confirmTrash" } }
+
+                Head { text: I18n.tr("System") }
+                Setting {
+                    label: I18n.tr("Default file manager")
+                    hint: I18n.tr("Open folders and “Show in folder” links in iNiR Files.")
+                    Toggle {
+                        checked: root.isDefaultFm
+                        onToggled: value => Core.call("default_fm_set", { enable: value }, r => {
+                            if (!root) return
+                            if (r.ok) root.isDefaultFm = r.default === true
+                            else Toast.fail(Errors.text(r.error))
+                        })
+                    }
+                }
 
                 Head { text: I18n.tr("Terminal") }
                 Setting {
