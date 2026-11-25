@@ -383,8 +383,28 @@ fn launcher_path() -> Option<PathBuf> {
     util::which("inir-files")
 }
 
+fn mime_default_for(mime: &str) -> Option<String> {
+    let text = fs::read_to_string(util::config_home().join("mimeapps.list")).ok()?;
+    let mut in_def = false;
+    for line in text.lines() {
+        let t = line.trim();
+        if t.starts_with('[') {
+            in_def = t == "[Default Applications]";
+            continue;
+        }
+        if in_def {
+            if let Some((k, v)) = t.split_once('=') {
+                if k.trim() == mime {
+                    return v.split(';').next().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+                }
+            }
+        }
+    }
+    None
+}
+
 pub fn default_fm_get() -> Result<Value, String> {
-    let def = default_app("inode/directory").map(|s| s == "inir-files.desktop").unwrap_or(false);
+    let def = mime_default_for("inode/directory").map(|s| s == "inir-files.desktop").unwrap_or(false);
     let dbus = fm1_service_path().is_file();
     Ok(json!({"default": def, "dbus": dbus}))
 }
@@ -415,8 +435,16 @@ pub fn default_fm_set(req: &Value) -> Result<Value, String> {
                 if t.starts_with('[') {
                     in_def = t == "[Default Applications]";
                 }
-                if in_def && t == "inode/directory=inir-files.desktop" {
-                    continue;
+                if in_def {
+                    if let Some((k, v)) = t.split_once('=') {
+                        if k.trim() == "inode/directory" {
+                            let rest: Vec<&str> = v.split(';').map(str::trim).filter(|s| !s.is_empty() && *s != "inir-files.desktop").collect();
+                            if !rest.is_empty() {
+                                out.push_str(&format!("inode/directory={};\n", rest.join(";")));
+                            }
+                            continue;
+                        }
+                    }
                 }
                 out.push_str(line);
                 out.push('\n');
