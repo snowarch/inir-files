@@ -52,11 +52,11 @@ FloatingWindow {
     readonly property bool busy: sheets.children.length > 0 || menuHost.visible || look.shown || paletteItem.shown
     readonly property bool keysFree: !root.busy && root.renaming.length === 0
     // A narrow window lays the places over the panes on demand, and keeps the preview for a window with room for it.
-    readonly property bool narrow: stageItem.width < Theme.dp(800)
+    readonly property bool narrow: stageItem.width < Theme.dp(740)
     readonly property bool railDocked: !root.narrow && Prefs.get("rail") === true
     property bool railOpen: false
-    readonly property real railWidth: Theme.dp(228)
-    readonly property bool asideRoom: stageItem.width - (root.railDocked ? root.railWidth : 0) - aside.open >= Theme.dp(600)
+    property real railWidth: Math.max(Theme.dp(170), Math.min(Theme.dp(340), Number(Prefs.recall("railWidth", Theme.dp(228))) || Theme.dp(228)))
+    readonly property bool asideRoom: stageItem.width - (root.railDocked ? root.railWidth : 0) - Theme.dp(240) >= Theme.dp(420)
     onNarrowChanged: root.railOpen = false
     function toggleRail(): void {
         if (root.narrow) root.railOpen = !root.railOpen
@@ -225,7 +225,7 @@ FloatingWindow {
             id: railSlot
             width: root.railDocked ? root.railWidth : 0
             height: parent.height
-            Behavior on width { NumberAnimation { duration: Theme.normal; easing.type: Easing.OutCubic } }
+            Behavior on width { enabled: !railEdge.pressed; NumberAnimation { duration: Theme.normal; easing.type: Easing.OutCubic } }
         }
 
         // The panes sit on a card of their own, a step down from the window around them.
@@ -314,6 +314,38 @@ FloatingWindow {
             }
             Rectangle { anchors.fill: parent; visible: root.narrow; color: Theme.rail }
             Rail { id: rail; browser: root; anchors.fill: parent }
+        }
+        // Drag seam to resize the docked left sidebar; double-click resets to default width.
+        MouseArea {
+            id: railEdge
+            visible: root.railDocked
+            x: railSlot.width - width / 2
+            width: Theme.dp(8)
+            height: parent.height
+            z: 5
+            hoverEnabled: true
+            cursorShape: Qt.SizeHorCursor
+            property real startX: 0
+            property real startW: 0
+            onPressed: mouse => { startX = mapToItem(null, mouse.x, 0).x; startW = root.railWidth }
+            onPositionChanged: mouse => {
+                if (!pressed) return
+                const dx = mapToItem(null, mouse.x, 0).x - startX
+                const maxW = Math.min(Theme.dp(360), Math.max(Theme.dp(190), stageItem.width * 0.36))
+                root.railWidth = Math.round(Math.max(Theme.dp(170), Math.min(maxW, startW + dx)))
+            }
+            onReleased: Prefs.remember("railWidth", Math.round(root.railWidth))
+            onDoubleClicked: { root.railWidth = Theme.dp(228); Prefs.remember("railWidth", Math.round(root.railWidth)) }
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: Theme.dp(16)
+                width: Theme.dp(2)
+                height: parent.height - Theme.dp(32)
+                radius: 1
+                color: railEdge.pressed ? Theme.accent : Theme.ink3
+                opacity: railEdge.pressed ? 0.85 : railEdge.containsMouse ? 0.38 : 0
+                Behavior on opacity { NumberAnimation { duration: Theme.hoverMs } }
+            }
         }
 
         Travel { browser: root; anchors.fill: parent; z: 600 }

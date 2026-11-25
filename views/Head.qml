@@ -10,8 +10,19 @@ Item {
     readonly property var pane: root.browser.activePane
     readonly property var folder: root.pane ? root.pane.folder : null
     property bool searchOpen: false
-    // Too narrow for the view switch: the More menu offers it instead, and the path keeps room to be read.
-    readonly property bool compact: root.width < Theme.dp(680)
+    // Narrow tiling windows (Niri/Umbriel half-tiles) collapse the 4-button pill into a single 1-click view button
+    // instead of hiding view switching inside More.
+    readonly property bool compact: root.width < Theme.dp(620) || (root.searchOpen && root.width < Theme.dp(760))
+    readonly property var viewOrder: ["grid", "list", "columns", "gallery"]
+    function viewGlyph(mode: string): string {
+        return ({ grid: "grid_view", list: "view_list", columns: "view_column", gallery: "photo_library" })[mode] ?? "grid_view"
+    }
+    function cycleView(step: int): void {
+        const cur = root.pane ? root.pane.viewMode : "grid"
+        const i = root.viewOrder.indexOf(cur)
+        const next = root.viewOrder[((i < 0 ? 0 : i) + step + root.viewOrder.length) % root.viewOrder.length]
+        root.browser.actions.setView(next)
+    }
     implicitHeight: Theme.dp(58)
 
     function startSearch(text: string): void {
@@ -188,6 +199,25 @@ Item {
                 { value: "gallery", glyph: "photo_library", tip: I18n.tr("Gallery"), keys: "Ctrl+4" }
             ]
             onChosen: value => root.browser.actions.setView(value)
+        }
+        Act {
+            id: viewAct
+            visible: root.compact && (!root.folder || root.folder.mode !== "start")
+            anchors.verticalCenter: parent.verticalCenter
+            glyph: root.viewGlyph(root.pane ? root.pane.viewMode : "grid")
+            tip: I18n.tr("View")
+            onClicked: m => {
+                if (m && m.button === Qt.MiddleButton) root.cycleView(1)
+                else root.browser.menus.openAt(root.browser.actions.viewEntries(), viewAct, true)
+            }
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.NoButton
+                onWheel: wheel => {
+                    const d = wheel.angleDelta.y || wheel.angleDelta.x
+                    if (d !== 0) root.cycleView(d > 0 ? -1 : 1)
+                }
+            }
         }
         Act {
             id: sortAct

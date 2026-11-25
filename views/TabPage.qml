@@ -139,9 +139,11 @@ Item {
         height: root.height
         color: Theme.line
         MouseArea {
+            id: splitEdge
             anchors.horizontalCenter: parent.horizontalCenter
             width: Theme.dp(9)
             height: parent.height
+            hoverEnabled: true
             cursorShape: Qt.SplitHCursor
             onPositionChanged: mouse => {
                 if (!pressed) return
@@ -149,6 +151,14 @@ Item {
                 root.ratio = Math.max(0.22, Math.min(0.78, x / root.width))
             }
             onDoubleClicked: root.ratio = 0.5
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: Theme.dp(2)
+                height: parent.height
+                color: splitEdge.pressed ? Theme.accent : Theme.ink3
+                opacity: splitEdge.pressed ? 0.85 : splitEdge.containsMouse ? 0.38 : 0
+                Behavior on opacity { NumberAnimation { duration: Theme.hoverMs } }
+            }
         }
     }
     Item {

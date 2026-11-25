@@ -13,11 +13,39 @@ Item {
     readonly property var folder: root.pane.folder
     readonly property alias view: current
     readonly property bool sideways: true
-    // The list's zoom steps size the columns too.
+    // The list's zoom steps size the columns too; dragging any column border overrides it until double-clicked.
     readonly property int zoom: Math.max(0, Math.min(2, root.pane.listZoom))
-    readonly property real colWidth: Theme.dp([228, 252, 292][root.zoom])
+    property real customColWidth: Number(Prefs.recall("colWidth", 0)) || 0
+    readonly property real colWidth: root.customColWidth > 0 ? Math.max(Theme.dp(170), Math.min(Theme.dp(420), root.customColWidth)) : Theme.dp([228, 252, 292][root.zoom])
     readonly property real rowHeight: Theme.dp([26, 30, 38][root.zoom])
     readonly property real iconSize: Theme.dp([16, 18, 24][root.zoom])
+
+    component ColEdge: MouseArea {
+        id: ce
+        anchors.right: parent.right
+        width: Theme.dp(7)
+        height: parent.height
+        z: 4
+        hoverEnabled: true
+        cursorShape: Qt.SizeHorCursor
+        property real startX: 0
+        property real startW: 0
+        onPressed: mouse => { startX = mapToItem(null, mouse.x, 0).x; startW = root.colWidth }
+        onPositionChanged: mouse => {
+            if (!pressed) return
+            const dx = mapToItem(null, mouse.x, 0).x - startX
+            root.customColWidth = Math.round(Math.max(Theme.dp(170), Math.min(Theme.dp(420), startW + dx)))
+        }
+        onReleased: Prefs.remember("colWidth", Math.round(root.customColWidth))
+        onDoubleClicked: { root.customColWidth = 0; Prefs.remember("colWidth", 0) }
+        Rectangle {
+            anchors.right: parent.right
+            width: ce.pressed || ce.containsMouse ? Theme.dp(2) : 1
+            height: parent.height
+            color: ce.pressed ? Theme.accent : ce.containsMouse ? Theme.ink3 : Theme.line
+            opacity: ce.pressed ? 0.85 : ce.containsMouse ? 0.45 : 1
+        }
+    }
 
     // The folder the columns are laid out for. It moves once the folder's new reading is in place, so the columns, the
     // one on screen and the one it opens all change in the same frame.
@@ -328,7 +356,7 @@ Item {
             strong: false
             text: root.blankText(listing.error, true)
         }
-        Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.line }
+        ColEdge {}
     }
 
     Flickable {
@@ -442,7 +470,7 @@ Item {
                     strong: false
                     text: root.folder.mode === "folder" ? root.blankText(root.folder.error, true) : ""
                 }
-                Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.line }
+                ColEdge {}
             }
 
             Loader {
