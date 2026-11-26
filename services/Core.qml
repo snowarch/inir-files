@@ -20,6 +20,22 @@ Singleton {
     property var localSendPeers: []
     property var localSendTransfers: ({})
     property bool localSendScanning: false
+    // Track open Browser windows so incoming LocalSend offers/toasts always route to one live window even when unfocused.
+    property var openBrowsers: []
+    property var frontBrowser: null
+    function registerBrowser(b: var): void {
+        if (!b || root.openBrowsers.indexOf(b) >= 0) return
+        root.openBrowsers = root.openBrowsers.concat([b])
+        if (!root.frontBrowser) root.frontBrowser = b
+    }
+    function focusBrowser(b: var): void {
+        if (b) root.frontBrowser = b
+    }
+    function unregisterBrowser(b: var): void {
+        const next = root.openBrowsers.filter(x => x !== b)
+        root.openBrowsers = next
+        if (root.frontBrowser === b) root.frontBrowser = next.length > 0 ? next[next.length - 1] : null
+    }
     property var places: ({ home: root.home, xdg: [], bookmarks: [], devices: [], network: [], trash: 0 })
     // Jobs at work and just finished, by id: the last event of each.
     property var jobs: ({})
@@ -298,8 +314,16 @@ Singleton {
             root.thumbOrder.push(key)
             if (root.thumbOrder.length > 2000) {
                 const drop = root.thumbOrder.splice(0, 400)
-                for (let i = 0; i < drop.length; i++) delete root.thumbs[drop[i]]
-                root.thumbMtimes = ({})
+                for (let i = 0; i < drop.length; i++) {
+                    const dk = drop[i]
+                    delete root.thumbs[dk]
+                    const sep = dk.lastIndexOf("|")
+                    if (sep > 0) {
+                        const dm = dk.slice(0, sep)
+                        // Only drop thumbMtimes when no waiter is still registered under this evicted key.
+                        if (!root.thumbWaiters[dk]) delete root.thumbMtimes[dm]
+                    }
+                }
             }
         }
         root.thumbs[key] = m.file

@@ -84,7 +84,7 @@ Sheet {
         Txt {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            text: I18n.n("%1 file · %2", "%1 files · %2", root.files.length, Fmt.size(root.offer?.totalBytes ?? 0))
+            text: I18n.n("%1 file", "%1 files", root.files.length) + " · " + Fmt.size(root.offer?.totalBytes ?? 0)
             size: Theme.small
             strong: true
             color: Theme.ink2

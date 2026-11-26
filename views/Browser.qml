@@ -43,6 +43,7 @@ FloatingWindow {
 
     readonly property Item stage: stageItem
     readonly property bool windowActive: stageItem.Window.active
+    onWindowActiveChanged: if (root.windowActive) Core.focusBrowser(root)
     property var tabs: []
     property int tabIndex: 0
     // The places of the tabs closed last, for Ctrl+Shift+T.
@@ -258,7 +259,10 @@ FloatingWindow {
             if (page?.activePane?.folder) page.activePane.folder.portalFilter = rules
         }
     }
-    Component.onDestruction: if (root.chooser && !root.chooserAnswered) root.replyChooser(false, [])
+    Component.onDestruction: {
+        Core.unregisterBrowser(root)
+        if (root.chooser && !root.chooserAnswered) root.replyChooser(false, [])
+    }
     // In Save mode, clicking an existing file fills the filename field for quick overwrite/edit.
     Connections {
         target: root.chooser && root.chooser.kind === "save" && root.activePane ? root.activePane.folder : null
@@ -276,6 +280,7 @@ FloatingWindow {
     }
 
     Component.onCompleted: {
+        Core.registerBrowser(root)
         const size = Prefs.recall("window", null)
         if (size && size.w >= 560 && size.h >= 400) { root.implicitWidth = size.w; root.implicitHeight = size.h }
         if (root.chooser) {

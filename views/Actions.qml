@@ -614,10 +614,9 @@ Item {
         function onConflict(q) { if (root.mine(q.job)) root.sheet(conflictSheet, { question: q }) }
         function onFailed(op, error) { if (root.browser.windowActive) root.fail(error) }
         function onLocalSendOffer(offer) {
-            if (root.browser.windowActive) root.sheet(localSendOfferSheet, { offer: offer })
+            if (Core.frontBrowser === root.browser) root.sheet(localSendOfferSheet, { offer: offer })
         }
         function onLocalSendTransferEvent(t) {
-            if (!root.browser.windowActive) return
             if (t.state === "pin") {
                 const ctx = root.pendingLocalSend[t.id]
                 if (!ctx) return
@@ -629,6 +628,15 @@ Item {
                     choices: [{ text: I18n.tr("Send"), kind: "solid", run: pin => root.sendLocalSend(ctx.peer, ctx.paths, pin) }]
                 })
                 return
+            }
+            const mine = root.pendingLocalSend[t.id] !== undefined
+            if (!mine && Core.frontBrowser !== root.browser) return
+            if (t.state === "done" || t.state === "rejected" || t.state === "failed" || t.state === "cancelled") {
+                if (mine) {
+                    const m = Object.assign({}, root.pendingLocalSend)
+                    delete m[t.id]
+                    root.pendingLocalSend = m
+                }
             }
             if (t.state === "done") {
                 if (t.direction === "receive") {

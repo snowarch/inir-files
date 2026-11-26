@@ -45,6 +45,7 @@ pub fn is_admin_op(op: &str) -> bool {
 }
 
 struct Session {
+    gen: u64,
     stdin: ChildStdin,
     child: Child,
 }
@@ -52,6 +53,7 @@ struct Session {
 #[derive(Default)]
 pub struct Admin {
     session: Mutex<Option<Session>>,
+    next_gen: AtomicU64,
     next_id: AtomicU64,
     pending: Arc<Mutex<HashMap<u64, mpsc::Sender<Value>>>>,
     starting: Mutex<()>,
@@ -99,7 +101,8 @@ impl Admin {
             return Err(if code == 126 || code == 127 { "admin_cancelled" } else { "admin_failed" }.into());
         }
 
-        *self.session.lock().unwrap() = Some(Session { stdin, child });
+        let my_gen = self.next_gen.fetch_add(1, Ordering::Relaxed) + 1;
+        *self.session.lock().unwrap() = Some(Session { gen: my_gen, stdin, child });
 
         let ctx_bg = ctx.clone();
         let pending = self.pending.clone();
@@ -115,18 +118,25 @@ impl Admin {
                     ctx_bg.out.send(&val);
                 }
             }
-            // Helper exited (user stopped it, timed out, or died): wake any pending waiters.
-            {
+            // Only tear down if this reader still owns the active session (guards against stop() + fast start() race).
+            let owned = {
                 let mut guard = ctx_bg.admin.session.lock().unwrap();
-                if let Some(mut s) = guard.take() {
-                    let _ = s.child.wait();
+                if guard.as_ref().map(|s| s.gen) == Some(my_gen) {
+                    if let Some(mut s) = guard.take() {
+                        let _ = s.child.wait();
+                    }
+                    true
+                } else {
+                    false
                 }
+            };
+            if owned {
+                let waiters: Vec<_> = pending.lock().unwrap().drain().collect();
+                for (_, tx) in waiters {
+                    let _ = tx.send(json!({"ok": false, "error": "admin_inactive"}));
+                }
+                ctx_bg.out.event("admin", json!({"active": false}));
             }
-            let waiters: Vec<_> = pending.lock().unwrap().drain().collect();
-            for (_, tx) in waiters {
-                let _ = tx.send(json!({"ok": false, "error": "admin_inactive"}));
-            }
-            ctx_bg.out.event("admin", json!({"active": false}));
         });
 
         ctx.out.event("admin", json!({"active": true}));
@@ -140,6 +150,10 @@ impl Admin {
             drop(s.stdin);
             let _ = s.child.kill();
             let _ = s.child.wait();
+            let waiters: Vec<_> = self.pending.lock().unwrap().drain().collect();
+            for (_, tx) in waiters {
+                let _ = tx.send(json!({"ok": false, "error": "admin_inactive"}));
+            }
             ctx.out.event("admin", json!({"active": false}));
         }
         Ok(json!({"active": false}))
