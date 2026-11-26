@@ -228,6 +228,15 @@ Item {
             onClicked: root.browser.menus.openAt(root.browser.actions.sortEntries(), sortAct, true)
         }
         Act {
+            id: newTabAct
+            visible: root.browser.tabs.length <= 1 && !root.browser.chooser
+            anchors.verticalCenter: parent.verticalCenter
+            glyph: "add"
+            tip: I18n.tr("New tab")
+            keys: "Ctrl+T"
+            onClicked: m => root.browser.newTab(m && m.button === Qt.MiddleButton ? root.browser.defaultPlace() : (root.folder ? root.folder.place : ""))
+        }
+        Act {
             id: moreAct
             anchors.verticalCenter: parent.verticalCenter
             glyph: "more_horiz"
