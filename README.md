@@ -17,7 +17,8 @@ The native file manager of the **iNiR** desktop ecosystem. Built in QML on **qs-
 ## Who it is for
 
 - **iNiR users on Niri and Umbriel** who want a file manager that matches their desktop's palette, fonts, corners and motion without dragging in GTK or KDE theming mismatches.
-- **Tiling-WM & keyboard-first users** who split, detach tabs into tiled windows, jump with a command palette (`Ctrl+K`), and filter folders in memory (`Ctrl+/`).
+- **Tiling-WM & keyboard-first users** who split, open/detach tabs into tiled windows in one click, jump with a command palette (`Ctrl+K`), and filter folders in memory (`Ctrl+/`).
+- **Everyday LAN & system workflows** with built-in **LocalSend v2.1** nearby file sharing (auto-discovery, send & receive), **Open as Administrator** mode via Polkit (`pkexec`, GUI never runs as root), and a native XDG Desktop Portal file picker.
 - **Media & code folders** that need fast thumbnails, a full-bleed photo gallery (`Ctrl+4`), Miller columns (`Ctrl+3`), rich previews (Markdown, code, PDF, video, audio, EXIF/HDR metadata) and an instant disk-space lens (`Ctrl+Shift+U`).
 
 ## Relation to iNiR
@@ -41,6 +42,7 @@ iNiR Files is a companion app of [iNiR](https://inir.space), not a hard-coupled 
 ┌──────────────────────────────────────────────────────────┐
 │  QML UI on qs-rs (single process, multi-window, IPC)     │
 │  ├─ Per-key reactive Prefs & per-pane live zoom/filter   │
+│  ├─ LRU Back/Forward cache & lazy split/background tabs  │
 │  ├─ Bucket-aligned GPU thumbnails (128/256/512/1024 px)  │
 │  └─ Views: Start, Grid, List, Columns, Gallery, Split    │
 └───────────────────────────┬──────────────────────────────┘
@@ -51,12 +53,14 @@ iNiR Files is a companion app of [iNiR](https://inir.space), not a hard-coupled 
 │  ├─ Parallel fuzzy search + ripgrep content search       │
 │  ├─ Parallel same-fs disk space analyzer (space_map)     │
 │  ├─ Jobs (copy/move/trash/archives) + conflict prompts   │
+│  ├─ Native LocalSend v2.1 (UDP multicast + HTTPS/HTTP)   │
+│  ├─ Polkit Administrator helper (pkexec --admin-helper)  │
 │  ├─ GVfs remote mounts (sftp, smb, ftp, webdav, nfs)     │
-│  └─ D-Bus org.freedesktop.FileManager1 service           │
+│  └─ D-Bus FileManager1 & XDG Portal FileChooser backend  │
 └──────────────────────────────────────────────────────────┘
 ```
 
-One `qs` process hosts every open window; launching `inir-files PATH` hands paths to the running instance over IPC. All disk I/O, recursive walks, thumbnail generation, media probing, Markdown rendering and file jobs run off the UI thread in Rust.
+One `qs` process hosts every open window; launching `inir-files PATH` hands paths to the running instance over IPC. All disk I/O, recursive walks, thumbnail generation, media probing, Markdown rendering, LocalSend transfers and file jobs run off the UI thread in Rust. Elevated operations run inside an isolated Polkit helper over a private pipe so the Wayland GUI never runs as root.
 
 ## Speed & comparison
 
@@ -69,23 +73,38 @@ Measured locally on Linux (x86_64):
 | Parallel disk space scan (`space_map`, 534 MB / 35 subtrees) | **291 ms** streamed live |
 | Miller columns reuse (24 navigation steps) | **507** delegates created (down from 1,831); cached revisit instant |
 | In-folder fuzzy filter (`Ctrl+/`) & Command Palette (`Ctrl+K`) | **< 1 ms** (in-memory, zero disk I/O) |
-| Memory (single process, active window + preview) | **~240–310 MB** RSS shared across windows |
+| Back / Forward folder revisits | **Instant** (LRU listing cache + silent disk revalidation) |
+| Memory management | Uncached unique thumbnails, lazy split pane, inactive tab view unload after 5 s, glibc arena trim |
 
 ### Honest comparison
 
 | Capability | iNiR Files | Dolphin | Nautilus | Thunar |
 |---|---|---|---|---|
 | Live iNiR palette / fonts / rounding sync | Native | Manual theme | Manual theme | Manual theme |
+| Native LocalSend v2.1 (discover, send, receive) | Built-in | No | No | No |
+| Open as Administrator (Polkit, non-root GUI) | Built-in (`admin://`) | Via `kio-admin` | Via `admin://` GVfs | No (root GUI) |
+| Native XDG Desktop Portal FileChooser | Built-in | Via `xdg-desktop-portal-kde` | Via `xdg-desktop-portal-gtk` | No |
 | Tiling-WM tab tear-off & split-pane detach | Built-in | Partial | Partial | No |
 | Command & Jump Palette (`Ctrl+K`) | Built-in | No | No | No |
 | Built-in multi-core Disk Space Analyzer | Built-in | Via Filelight | Via Baobab | No |
 | Miller Columns + Full-bleed Gallery (`Ctrl+3`/`4`) | Built-in | No | No | No |
 | Quick Look (`Space`: PDF, MD, code, media, fonts) | Built-in | Limited | Via Sushi | No |
 | Per-folder view memory | Built-in | Built-in | No | No |
-| Startup RAM footprint | ~240–310 MB (Qt/QML) | ~90–140 MB | ~70–110 MB | ~35–55 MB |
+| Startup RAM footprint | ~200–310 MB (Qt/QML) | ~90–140 MB | ~70–110 MB | ~35–55 MB |
 | Plugin / third-party extension ecosystem | Minimal by design | Extensive | Extensions | Plugins |
 
-## Key features & shortcuts
+## Highlights & shortcuts
+
+### Built-in LocalSend v2.1
+- **Auto-discovery on LAN:** Listens on UDP multicast `224.0.0.167:53317` with `SO_REUSEADDR`/`SO_REUSEPORT` (coexists cleanly with a standalone LocalSend app), plus a fast `/24` subnet scan and manual IP fallback.
+- **Send from anywhere:** Right-click any files or folders → **Send via LocalSend**, drag and drop onto **LocalSend** in the sidebar, or open the **LocalSend** sheet (`Ctrl+K` → `LocalSend`). Supports PIN-protected receivers and preserves folder trees.
+- **Receive safely:** Dual HTTPS/HTTP server (pure Rust `rustls` + self-signed SHA-256 cert) streams incoming files to disk with a live accept/decline dialog (or optional **Auto-accept** in Settings).
+
+### Open as Administrator
+- **Zero root GUI:** Authenticates once through your desktop Polkit agent (`pkexec`), runs a strictly scoped elevated file helper over a private pipe, and exits automatically on **Exit** or after 15 minutes idle.
+- **Everywhere you need it:** Appears on permission-denied folders (such as `/root`), folder context menus, the `...` menu, Command Palette, and `admin:///path` in the path bar, with an amber warning banner while active.
+
+### Keyboard shortcuts
 
 | Shortcut | Action |
 |---|---|
@@ -96,7 +115,7 @@ Measured locally on Linux (x86_64):
 | `Ctrl+1` / `2` / `3` / `4` | Grid, List, Miller Columns, full-bleed Gallery (remembered per folder) |
 | `Space` | Full-window Quick Look (`PageDown`/`PageUp` for PDF pages) |
 | `F3` | Split view (detach either side into a new window from its header) |
-| `Ctrl+T` / `Ctrl+Shift+D` / `Ctrl+Alt+W` | New tab, duplicate tab, detach tab to new tiled window (or drag tab vertically) |
+| `Ctrl+T` / `Ctrl+Shift+D` / `Ctrl+Alt+W` | New tab (or click `+` in the top bar), duplicate tab, detach tab to new tiled window |
 | `Ctrl+Shift+PgUp` / `PgDown` | Reorder tabs by keyboard |
 | `Ctrl+Scroll` / `Ctrl+=` / `-` / `0` | Per-pane zoom (never stalls other windows) |
 | `F2` / `Ctrl+S` | Inline rename (single) or batch rename sheet (multi); select by pattern |
@@ -156,6 +175,7 @@ qs check -p shell.qml
 | `rg` (ripgrep) | Fast search inside file contents |
 | `7z`, `bsdtar` | Archive inspection, compression (zip, 7z, tar.zst/xz/gz) and extraction |
 | `udisksctl`, `gio` | Disk mounting/ejection and GVfs remote servers |
+| `pkexec` (Polkit) | Open as Administrator elevated file helper |
 | `wl-copy`, `wl-paste` | Wayland clipboard integration |
 
 ## License
