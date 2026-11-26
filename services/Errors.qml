@@ -29,6 +29,10 @@ Singleton {
         case "noscheme": return I18n.tr("No installed gvfs backend opens this kind of address")
         case "badaddress": return I18n.tr("Write an address such as sftp://server or smb://server/share")
         case "nofuse": return I18n.tr("It is connected, but gvfsd-fuse is not running, so its files cannot open")
+        case "nopkexec": return I18n.tr("Administrator mode needs pkexec (Polkit)")
+        case "admin_cancelled": return I18n.tr("Authentication was cancelled")
+        case "admin_failed": return I18n.tr("Could not start administrator mode")
+        case "admin_inactive": return I18n.tr("Administrator session ended")
         default: return code && code.length > 0 ? code : I18n.tr("Something went wrong")
         }
     }

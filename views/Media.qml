@@ -9,6 +9,7 @@ Item {
     id: root
     property var entry: null
     property bool large: false
+    property bool admin: false
     // What the core knows of the file beyond its listing: size of a picture, streams of a film, pages, an archive's list.
     property var info: ({})
     readonly property string path: root.entry?.path ?? ""
@@ -54,10 +55,10 @@ Item {
         onTriggered: {
             const p = root.path
             if (p.length === 0) return
-            Core.call("info", { path: p }, r => { if (root && r.ok && p === root.path) root.info = r })
-            if (root.textual) Core.call("text", { path: p, limit: root.large ? 1048576 : 98304 }, r => { if (root && r.ok && p === root.path) root.text = r })
+            Core.call("info", { path: p, admin: root.admin }, r => { if (root && r.ok && p === root.path) root.info = r })
+            if (root.textual) Core.call("text", { path: p, limit: root.large ? 1048576 : 98304, admin: root.admin }, r => { if (root && r.ok && p === root.path) root.text = r })
             if (root.large && root.kind === "folder")
-                Core.call("list", { path: p, hidden: Prefs.get("hidden"), sort: Prefs.get("sort"), desc: Prefs.get("desc"), dirsFirst: Prefs.get("dirsFirst"), counts: false }, r => {
+                Core.call("list", { path: p, hidden: Prefs.get("hidden"), sort: Prefs.get("sort"), desc: Prefs.get("desc"), dirsFirst: Prefs.get("dirsFirst"), counts: false, admin: root.admin }, r => {
                     if (!root || p !== root.path) return
                     root.heldError = r.ok ? "" : r.error
                     root.held = r.ok ? (r.entries ?? []) : []
@@ -365,7 +366,7 @@ Item {
                     // Colours as #AARRGGBB: Qt reads that form both in styles and in attributes.
                     const look = { ink: String(Theme.ink), ink2: String(Theme.ink2), ink3: String(Theme.ink3), line: String(Theme.alpha(Theme.ink, 0.14)), fill: String(Theme.fill),
                         accent: String(Theme.accent), mono: Theme.mono, base: page.base, width: Math.max(64, page.width - 4) }
-                    Core.call("markdown", { path: p, limit: root.large ? 1048576 : 98304, look: look }, r => { if (r.ok && p === root.path) page.html = r.html })
+                    Core.call("markdown", { path: p, limit: root.large ? 1048576 : 98304, look: look, admin: root.admin }, r => { if (root && r.ok && p === root.path) page.html = r.html })
                 }
             }
             text: page.html

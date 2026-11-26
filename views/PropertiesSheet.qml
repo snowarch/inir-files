@@ -22,10 +22,11 @@ Sheet {
     property string sumToken: ""
     cardWidth: Theme.dp(500)
 
+    readonly property bool admin: root.browser.activePane ? root.browser.activePane.folder.admin : false
     function load(): void {
-        if (root.one) Core.call("info", { path: root.paths[0] }, r => { if (r.ok) root.info = r })
-        Core.call("stat", { paths: root.paths }, r => {
-            if (!r.ok) return
+        if (root.one) Core.call("info", { path: root.paths[0], admin: root.admin }, r => { if (root && r.ok) root.info = r })
+        Core.call("stat", { paths: root.paths, admin: root.admin }, r => {
+            if (!root || !r.ok) return
             // Nothing left to tell of (gone since it was asked for, as a stale "Show in folder" can be).
             if (r.entries.length === 0) { Toast.fail(Errors.text("missing")); root.close(); return }
             root.entries = r.entries
@@ -54,9 +55,10 @@ Sheet {
         Core.call("checksum", { token: root.sumToken, path: root.paths[0], algo: algo })
     }
     function chmod(bit: int): void {
-        Core.call("chmod", { path: root.paths[0], mode: root.info.mode ^ bit }, r => {
+        Core.call("chmod", { path: root.paths[0], mode: root.info.mode ^ bit, admin: root.admin }, r => {
+            if (!root) return
             if (!r.ok) { Toast.fail(Errors.text(r.error)); return }
-            Core.call("info", { path: root.paths[0] }, i => { if (i.ok) root.info = i })
+            Core.call("info", { path: root.paths[0], admin: root.admin }, i => { if (root && i.ok) root.info = i })
         })
     }
 

@@ -12,6 +12,7 @@ Singleton {
     readonly property string binary: Quickshell.env("INIR_FILES_CORE") || Quickshell.shellPath("core/target/release/inir-files-core")
     readonly property string home: Quickshell.env("HOME") ?? "/"
     property bool ready: false
+    property bool adminActive: false
     property var places: ({ home: root.home, xdg: [], bookmarks: [], devices: [], network: [], trash: 0 })
     // Jobs at work and just finished, by id: the last event of each.
     property var jobs: ({})
@@ -64,6 +65,19 @@ Singleton {
     }
     function cancelJob(id: int): void { root.call("job_cancel", { job: id }) }
     function answer(id: int, action: string, all: bool): void { root.call("job_answer", { job: id, action: action, all: all }) }
+    function startAdmin(done: var): void {
+        if (root.adminActive) { if (done) done({ ok: true, active: true }); return }
+        root.call("admin_start", {}, r => {
+            if (r.ok && r.active) root.adminActive = true
+            if (done) done(r)
+        })
+    }
+    function stopAdmin(done: var): void {
+        root.call("admin_stop", {}, r => {
+            root.adminActive = false
+            if (done) done(r)
+        })
+    }
     function forgetJob(id: int): void {
         const j = Object.assign({}, root.jobs)
         delete j[id]
@@ -288,6 +302,7 @@ Singleton {
         case "show": root.showRequested(m.how, m.paths ?? []); break
         case "chooser": root.chooserRequested(m); break
         case "chooser_cancel": root.chooserCancelled(m.token ?? ""); break
+        case "admin": root.adminActive = m.active === true; break
         }
     }
 
@@ -301,6 +316,7 @@ Singleton {
         }
         onExited: (code, status) => {
             root.ready = false
+            root.adminActive = false
             const w = root.waiting
             root.waiting = ({})
             for (const id in w) w[id]({ id: Number(id), ok: false, error: "core" })

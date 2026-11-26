@@ -104,6 +104,7 @@ FocusScope {
         anchors.rightMargin: Theme.dp(64)
         anchors.bottomMargin: Theme.dp(28)
         large: true
+        admin: !!root.folder && root.folder.admin
         entry: root.shown ? root.entry : null
     }
     Act {

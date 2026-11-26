@@ -28,6 +28,10 @@ pub struct Ctl {
 }
 
 impl Registry {
+    pub fn with_base(base: u64) -> Self {
+        Registry { next: AtomicU64::new(base), jobs: Mutex::new(HashMap::new()) }
+    }
+
     pub fn cancel(&self, id: u64) {
         if let Some(c) = self.jobs.lock().unwrap().get(&id) {
             c.cancel.store(true, Ordering::Relaxed);

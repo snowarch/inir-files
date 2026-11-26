@@ -31,7 +31,38 @@ Item {
     }
     function terminalCommand(): string { return Prefs.get("terminal") ?? "" }
     function sheet(component: Component, props: var): var { return root.browser.sheet(component, props ?? {}) }
-    function job(op: string, args: var, say: string): void { Core.job(op, args, { owner: root.browser, say: say }) }
+    function job(op: string, args: var, say: string): void {
+        const a = Object.assign({}, args ?? {})
+        if (a.admin === undefined && root.browser.activePane?.folder?.admin === true) a.admin = true
+        Core.job(op, a, { owner: root.browser, say: say, undoable: a.admin !== true })
+    }
+    function openAsAdmin(pane: var, targetPath: var): void {
+        const p = pane ?? root.browser.activePane
+        if (!p) return
+        const dest = (typeof targetPath === "string" && targetPath.length > 0) ? targetPath : (root.here(p) || "/")
+        Core.startAdmin(r => {
+            if (!root) return
+            if (!r.ok) {
+                if (r.error !== "admin_cancelled") root.fail(r.error)
+                return
+            }
+            p.folder.admin = true
+            p.folder.loadedPlace = ""
+            if (p.folder.mode === "folder" && p.folder.path === dest) p.folder.load(false)
+            else p.folder.go(dest)
+            Toast.show(I18n.tr("Acting as Administrator"), "", null)
+        })
+    }
+    function exitAdmin(pane: var): void {
+        const p = pane ?? root.browser.activePane
+        if (p) {
+            p.folder.admin = false
+            p.folder.loadedPlace = ""
+            p.folder.load(false)
+        }
+        Core.stopAdmin()
+        Toast.show(I18n.tr("Exited administrator mode"), "", null)
+    }
     // A new file or folder: chosen when it shows, named at once if asked, and gone again by an undo.
     function created(pane: var, path: string, rename: bool): void {
         pane.folder.focusPath = path
@@ -222,12 +253,12 @@ Item {
     function newFolder(pane: var): void {
         const dir = root.here(pane)
         if (dir.length === 0) return
-        Core.call("mkdir", { dir: dir, name: I18n.tr("New folder") }, r => r.ok ? root.created(pane, r.path, true) : root.fail(r.error))
+        Core.call("mkdir", { dir: dir, name: I18n.tr("New folder"), admin: pane.folder.admin }, r => r.ok ? root.created(pane, r.path, true) : root.fail(r.error))
     }
     function newFile(pane: var, template: string): void {
         const dir = root.here(pane)
         if (dir.length === 0) return
-        const args = template.length > 0 ? { dir: dir, template: template } : { dir: dir, name: I18n.tr("New document") }
+        const args = template.length > 0 ? { dir: dir, template: template, admin: pane.folder.admin } : { dir: dir, name: I18n.tr("New document"), admin: pane.folder.admin }
         Core.call("newfile", args, r => r.ok ? root.created(pane, r.path, true) : root.fail(r.error))
     }
     function rename(pane: var): void {
@@ -242,10 +273,11 @@ Item {
         const pane = root.browser.activePane
         root.browser.renaming = ""
         if (name.length === 0 || name === Fmt.name(path)) { if (pane) pane.forceActiveFocus(); return }
-        Core.call("rename", { path: path, name: name }, r => {
+        const adm = pane ? pane.folder.admin : false
+        Core.call("rename", { path: path, name: name, admin: adm }, r => {
             if (!r.ok) return root.fail(r.error)
             if (pane) { pane.folder.focusPath = r.to; pane.folder.reload(); pane.forceActiveFocus() }
-            Undo.push(Undo.renamed(r))
+            if (!adm) Undo.push(Undo.renamed(r))
         })
     }
     function renameCancelled(pane: var): void {
@@ -280,6 +312,7 @@ Item {
         const paths = f.chosenPaths()
         if (paths.length === 0) return
         if (f.mode === "trash") { root.purge(pane); return }
+        if (f.admin) { root.askDelete(paths, "delete", true); return }
         const go = () => root.job("trash", { paths: paths }, I18n.n("%1 item moved to the trash", "%1 items moved to the trash", paths.length))
         if (!Prefs.get("confirmTrash")) { go(); return }
         root.sheet(confirmSheet, {
@@ -291,13 +324,14 @@ Item {
         const paths = pane.folder.chosenPaths()
         if (paths.length === 0) return
         if (pane.folder.mode === "trash") { root.purge(pane); return }
-        root.askDelete(paths, "delete")
+        root.askDelete(paths, "delete", pane.folder.admin)
     }
-    function askDelete(paths: var, op: string): void {
+    function askDelete(paths: var, op: string, admin: var): void {
+        const args = admin === true ? { paths: paths, admin: true } : { paths: paths }
         root.sheet(confirmSheet, {
             title: paths.length === 1 ? I18n.tr("Delete “%1” forever?", Fmt.name(paths[0])) : I18n.n("Delete %1 item forever?", "Delete %1 items forever?", paths.length),
             subtitle: I18n.tr("It cannot come back."),
-            choices: [{ text: I18n.tr("Delete"), kind: "danger", run: () => Core.job(op, { paths: paths }, { owner: root.browser, undoable: false, say: I18n.n("%1 item deleted", "%1 items deleted", paths.length) }) }]
+            choices: [{ text: I18n.tr("Delete"), kind: "danger", run: () => Core.job(op, args, { owner: root.browser, undoable: false, say: I18n.n("%1 item deleted", "%1 items deleted", paths.length) }) }]
         })
     }
     function purge(pane: var): void { const p = pane.folder.chosenPaths(); if (p.length > 0) root.askDelete(p, "purge") }
@@ -410,6 +444,9 @@ Item {
             { text: I18n.tr("Analyze disk space"), glyph: "donut_large", keys: "Ctrl+Shift+U", enabled: root.here(pane).length > 0, run: () => root.analyzeSpace(pane) },
             { text: I18n.tr("Command palette"), glyph: "bolt", keys: "Ctrl+K", run: () => root.browser.palette.open("") },
             { text: I18n.tr("Connect to server…"), glyph: "add_link", run: () => root.connect("", false) },
+            pane && pane.folder.admin
+                ? { text: I18n.tr("Exit administrator mode"), glyph: "logout", run: () => root.exitAdmin(pane) }
+                : { text: I18n.tr("Open as Administrator"), glyph: "admin_panel_settings", enabled: root.here(pane).length > 0, run: () => root.openAsAdmin(pane, root.here(pane)) },
             { separator: true },
             { text: I18n.tr("Show hidden files"), glyph: "visibility", keys: "Ctrl+H", checked: Prefs.get("hidden") === true, run: () => Prefs.set("hidden", !Prefs.get("hidden")) },
             { text: I18n.tr("Select all"), glyph: "select_all", keys: "Ctrl+A", enabled: !start, run: () => pane.folder.selectAll() },
@@ -447,6 +484,9 @@ Item {
             { text: I18n.tr("Show hidden files"), glyph: "visibility", keys: "Ctrl+H", checked: Prefs.get("hidden") === true, run: () => Prefs.set("hidden", !Prefs.get("hidden")) },
             { separator: true },
             { text: I18n.tr("Open in terminal"), glyph: "terminal", keys: "F4", enabled: dir.length > 0, run: () => root.terminal(dir) },
+            f.admin
+                ? { text: I18n.tr("Exit administrator mode"), glyph: "logout", run: () => root.exitAdmin(pane) }
+                : { text: I18n.tr("Open as Administrator"), glyph: "admin_panel_settings", enabled: dir.length > 0, run: () => root.openAsAdmin(pane, dir) },
             { text: I18n.tr("Add to bookmarks"), glyph: "bookmark_add", keys: "Ctrl+B", enabled: dir.length > 0, run: () => root.bookmark(dir) },
             { text: I18n.tr("Copy path"), glyph: "content_copy", enabled: dir.length > 0, run: () => root.copyText(dir) },
             { text: I18n.tr("Properties"), glyph: "info", keys: "Alt+Enter", enabled: dir.length > 0, run: () => root.propertiesOf([dir]) }
@@ -497,6 +537,7 @@ Item {
             out.push({ separator: true })
             out.push({ text: I18n.tr("Copy path"), glyph: "link", keys: "Ctrl+Shift+C", run: () => root.copyText(paths.join("\n")) })
             if (one && one.dir) {
+                out.push({ text: I18n.tr("Open as Administrator"), glyph: "admin_panel_settings", run: () => root.openAsAdmin(pane, one.path) })
                 out.push({ text: I18n.tr("Open in terminal"), glyph: "terminal", run: () => root.terminal(one.path) })
                 out.push({ text: I18n.tr("Add to bookmarks"), glyph: "bookmark_add", run: () => root.bookmark(one.path) })
             }
@@ -513,6 +554,7 @@ Item {
         root.menus.open([
             { text: I18n.tr("Open in new tab"), glyph: "tab", run: () => root.browser.newTab(path) },
             { text: I18n.tr("Open in new window"), glyph: "open_in_browser", run: () => root.browser.newWindow(path) },
+            real ? { text: I18n.tr("Open as Administrator"), glyph: "admin_panel_settings", run: () => root.openAsAdmin(root.browser.activePane, path) } : null,
             real ? { text: I18n.tr("Open in terminal"), glyph: "terminal", run: () => root.terminal(path) } : null,
             real ? { separator: true } : null,
             real ? { text: I18n.tr("Copy path"), glyph: "content_copy", run: () => root.copyText(path) } : null,

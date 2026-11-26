@@ -339,10 +339,57 @@ FloatingWindow {
                 width: parent.width
                 height: implicitHeight
             }
+            // Administrator mode warning banner (Dolphin-style): unmistakable, one-click exit.
+            Rectangle {
+                id: adminBar
+                readonly property bool active: !!root.activePane && root.activePane.folder.admin
+                anchors.top: headItem.bottom
+                width: parent.width
+                height: active ? Theme.dp(38) : 0
+                visible: height > 0
+                clip: true
+                color: Theme.alpha(Theme.warning, Theme.light ? 0.14 : 0.18)
+                Behavior on height { NumberAnimation { duration: Theme.fast; easing.type: Easing.OutCubic } }
+                Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.alpha(Theme.warning, 0.35) }
+                Row {
+                    anchors.left: parent.left
+                    anchors.leftMargin: Theme.dp(14)
+                    anchors.right: exitAdminBtn.left
+                    anchors.rightMargin: Theme.dp(10)
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.dp(8)
+                    Glyph {
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "admin_panel_settings"
+                        fill: 1
+                        size: Theme.dp(17)
+                        color: Theme.warning
+                    }
+                    Txt {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.max(Theme.dp(40), parent.width - Theme.dp(26))
+                        text: I18n.tr("Acting as Administrator — changes affect system files")
+                        size: Theme.small
+                        strong: true
+                        color: Theme.ink
+                        elide: Text.ElideRight
+                    }
+                }
+                Pill {
+                    id: exitAdminBtn
+                    anchors.right: parent.right
+                    anchors.rightMargin: Theme.dp(10)
+                    anchors.verticalCenter: parent.verticalCenter
+                    compact: true
+                    glyph: "logout"
+                    text: I18n.tr("Exit")
+                    onClicked: root.actions.exitAdmin(root.activePane)
+                }
+            }
             Filters {
                 id: filters
                 browser: root
-                anchors.top: headItem.bottom
+                anchors.top: adminBar.bottom
                 width: parent.width
                 height: filters.shown ? implicitHeight : 0
                 visible: height > 0

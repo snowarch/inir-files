@@ -9,6 +9,8 @@ Item {
 
     property string path: Core.home
     property string mode: "folder"          // folder, trash, recent, search, start
+    // Elevated Polkit helper session for this pane (Dolphin-style "Act as Administrator").
+    property bool admin: false
     // Updated atomically at the end of enter()/search()/stopSearch() so switching mode + path never emits an intermediate place.
     property string place: Core.home
     property string loadedPlace: ""
@@ -136,7 +138,7 @@ Item {
         root.anchor = -1
         root.syncPlace()
         // Instant Back/Forward from LRU listing cache, followed by a quiet background revalidation against disk.
-        if (root.mode === "folder") {
+        if (root.mode === "folder" && !root.admin) {
             const cached = Core.cachedList(root.path, root.showHidden, root.sortKey, root.desc, root.dirsFirst)
             if (cached) {
                 const serial = ++root.loadSerial
@@ -196,10 +198,11 @@ Item {
         const reqSort = root.sortKey
         const reqDesc = root.desc
         const reqDirsFirst = root.dirsFirst
+        const reqAdmin = root.admin && root.mode === "folder"
         if (!keep || root.loadedPlace !== root.place) root.loading = true
         const done = r => {
             if (!root) return
-            if (r.ok && root.mode === "folder" && reqPath === root.path)
+            if (r.ok && root.mode === "folder" && !reqAdmin && reqPath === root.path)
                 Core.rememberList(reqPath, reqHidden, reqSort, reqDesc, reqDirsFirst, r)
             root.apply(serial, r, keep)
         }
@@ -207,7 +210,7 @@ Item {
         else if (root.mode === "recent") Core.call("recent", {}, done)
         else if (root.mode === "start") { if (keep) Core.refreshPlaces(); Core.call("recent", {}, done) }
         else if (root.mode === "search") root.runSearch()
-        else Core.call("list", { path: reqPath, hidden: reqHidden, sort: reqSort, desc: reqDesc, dirsFirst: reqDirsFirst, counts: Prefs.get("counts"), pane: root.paneId }, done)
+        else Core.call("list", { path: reqPath, hidden: reqHidden, sort: reqSort, desc: reqDesc, dirsFirst: reqDirsFirst, counts: !reqAdmin && Prefs.get("counts"), pane: root.paneId, admin: reqAdmin }, done)
     }
     function reload(): void {
         if (root.mode !== "search") root.load(root.loadedPlace === root.place)
@@ -365,6 +368,13 @@ Item {
             if (b.error) Toast.fail(Errors.text(b.error))
         }
         function onReadyChanged() { if (Core.ready && root.error === "core") root.load(false) }
+        function onAdminActiveChanged() {
+            if (!Core.adminActive && root.admin) {
+                root.admin = false
+                root.loadedPlace = ""
+                root.load(false)
+            }
+        }
     }
 
     // ---- instant in-folder fuzzy filter (zero disk I/O)

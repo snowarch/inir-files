@@ -128,6 +128,8 @@ Item {
             cmd(I18n.tr("New folder"), "create_new_folder", "Ctrl+Shift+N", () => b.actions.newFolder(pane))
             cmd(I18n.tr("Open in terminal"), "terminal", "F4", () => b.actions.terminal(f.path))
             cmd(I18n.tr("Add to bookmarks"), "bookmark_add", "Ctrl+B", () => b.actions.bookmark(f.path))
+            if (f.admin) cmd(I18n.tr("Exit administrator mode"), "logout", "", () => b.actions.exitAdmin(pane))
+            else cmd(I18n.tr("Open as Administrator"), "admin_panel_settings", "", () => b.actions.openAsAdmin(pane, f.path))
         }
         cmd(I18n.tr("Split view"), "vertical_split", "F3", () => b.currentPage?.toggleSplit())
         cmd(I18n.tr("New tab"), "add", "Ctrl+T", () => b.newTab(f ? f.place : ""))

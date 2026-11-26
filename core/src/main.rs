@@ -3,6 +3,7 @@
 // "error": "denied"}). Work that streams (thumbnails, jobs, searches, sizes, folder changes) arrives as events
 // ({"event": "thumb", ...}). The process ends when the interface closes stdin, after the jobs at work have finished.
 
+mod admin;
 mod apps;
 mod fm1;
 mod info;
@@ -28,7 +29,7 @@ use std::sync::{Arc, Mutex};
 pub struct Out;
 
 impl Out {
-    fn send(&self, v: &Value) {
+    pub fn send(&self, v: &Value) {
         let mut line = v.to_string();
         line.push('\n');
         let mut o = std::io::stdout().lock();
@@ -54,6 +55,7 @@ pub struct Ctx {
     pub watch: watch::Watch,
     pub talks: remote::Talks,
     pub portal: portal::Registry,
+    pub admin: admin::Admin,
     cancels: Mutex<HashMap<String, Arc<AtomicBool>>>,
 }
 
@@ -115,7 +117,15 @@ fn handle(ctx: &Arc<Ctx>, req: Value) {
     let id = req["id"].clone();
     let op = req["op"].as_str().unwrap_or("").to_string();
     let path = PathBuf::from(req["path"].as_str().unwrap_or(""));
+    if req["admin"].as_bool() == Some(true) && admin::is_admin_op(&op) {
+        let res = ctx.admin.call(req);
+        reply(ctx, &id, res);
+        return;
+    }
     let res: Result<Value, String> = match op.as_str() {
+        "admin_start" => ctx.admin.start(ctx),
+        "admin_stop" => ctx.admin.stop(ctx),
+        "admin_status" => Ok(json!({"active": ctx.admin.active()})),
         "ping" => Ok(json!({})),
         "list" => match list::list(ctx, &req) {
             Ok((v, counts)) => {
@@ -170,11 +180,21 @@ fn handle(ctx: &Arc<Ctx>, req: Value) {
         }
         "copy" | "move" | "duplicate" | "link" | "trash" | "delete" | "restore" | "untrash" | "purge" | "emptytrash" | "extract" | "compress" | "movepairs" => jobs::start(ctx.clone(), &op, &req),
         "job_cancel" => {
-            ctx.jobs.cancel(req["job"].as_u64().unwrap_or(0));
+            let jid = req["job"].as_u64().unwrap_or(0);
+            if jid >= admin::ADMIN_JOB_BASE {
+                let _ = ctx.admin.call(req);
+            } else {
+                ctx.jobs.cancel(jid);
+            }
             Ok(json!({}))
         }
         "job_answer" => {
-            ctx.jobs.resolve(req["job"].as_u64().unwrap_or(0), req["action"].as_str().unwrap_or("skip").to_string(), req["all"].as_bool().unwrap_or(false));
+            let jid = req["job"].as_u64().unwrap_or(0);
+            if jid >= admin::ADMIN_JOB_BASE {
+                let _ = ctx.admin.call(req);
+            } else {
+                ctx.jobs.resolve(jid, req["action"].as_str().unwrap_or("skip").to_string(), req["all"].as_bool().unwrap_or(false));
+            }
             Ok(json!({}))
         }
         "trash_list" => Ok(jobs::trash_list(ctx)),
@@ -221,6 +241,10 @@ fn handle(ctx: &Arc<Ctx>, req: Value) {
 }
 
 fn main() {
+    if std::env::args().any(|a| a == "--admin-helper") {
+        admin::run_helper();
+        return;
+    }
     let ctx = Arc::new(Ctx {
         out: Out,
         mime: mime::MimeDb::load(),
@@ -229,6 +253,7 @@ fn main() {
         watch: watch::Watch::default(),
         talks: remote::Talks::default(),
         portal: portal::Registry::default(),
+        admin: admin::Admin::default(),
         cancels: Mutex::new(HashMap::new()),
     });
     thumbs::start(ctx.clone());
@@ -244,9 +269,10 @@ fn main() {
         match serde_json::from_str::<Value>(&line) {
             Ok(req) => {
                 // Fast lock-only ops run inline on the stdin loop to avoid spawning thousands of short-lived threads.
-                let fast = matches!(
+                let is_admin = req["admin"].as_bool() == Some(true) || req["job"].as_u64().unwrap_or(0) >= admin::ADMIN_JOB_BASE;
+                let fast = !is_admin && matches!(
                     req["op"].as_str().unwrap_or(""),
-                    "ping" | "thumb" | "thumbs_clear" | "cancel" | "job_cancel" | "job_answer" | "chooser_reply"
+                    "ping" | "thumb" | "thumbs_clear" | "cancel" | "job_cancel" | "job_answer" | "chooser_reply" | "admin_status"
                 );
                 if fast {
                     handle(&ctx, req);

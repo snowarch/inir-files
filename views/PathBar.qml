@@ -75,7 +75,8 @@ Inset {
 
     function edit(): void {
         if (!root.folder) return
-        field.text = root.folder.mode === "folder" ? Fmt.pretty(root.folder.path) : ""
+        const p = root.folder.mode === "folder" ? (root.folder.admin ? "admin://" + root.folder.path : Fmt.pretty(root.folder.path)) : ""
+        field.text = p
         root.editing = true
         field.forceActiveFocus()
         field.selectAll()
@@ -93,12 +94,19 @@ Inset {
         return t
     }
     function go(text: string): void {
-        // A server's address (sftp://, smb://, \\\\server\\share) connects first.
         const typed = text.trim()
+        if (/^admin:\/\//i.test(typed)) {
+            const p = typed.slice(8) || "/"
+            root.finish()
+            root.browser.actions.openAsAdmin(root.pane, p.startsWith("/") ? p : "/" + p)
+            return
+        }
+        // A server's address (sftp://, smb://, \\\\server\\share) connects first.
         if ((/^[a-z][a-z0-9+.-]*:\/\//i.test(typed) && !/^file:/i.test(typed)) || typed.startsWith("\\\\")) { root.finish(); root.browser.actions.connect(typed, false); return }
         const target = root.resolve(text)
         if (target.length === 0) { root.finish(); return }
-        Core.call("stat", { paths: [target] }, r => {
+        Core.call("stat", { paths: [target], admin: root.folder && root.folder.admin }, r => {
+            if (!root) return
             const e = r.ok ? (r.entries ?? [])[0] : null
             if (!e) { Toast.fail(I18n.tr("Nothing is at %1", Fmt.pretty(target))); return }
             root.finish()
@@ -163,6 +171,15 @@ Inset {
         Row {
             id: steps
             height: flick.height
+            Rectangle {
+                visible: !!root.folder && root.folder.admin
+                anchors.verticalCenter: parent.verticalCenter
+                width: Theme.dp(26)
+                height: Theme.dp(26)
+                radius: Theme.round(8)
+                color: Theme.alpha(Theme.warning, Theme.light ? 0.16 : 0.22)
+                Glyph { anchors.centerIn: parent; name: "admin_panel_settings"; fill: 1; size: Theme.dp(15); color: Theme.warning }
+            }
             Repeater {
                 model: root.crumbs
                 delegate: Row {

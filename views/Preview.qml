@@ -26,7 +26,8 @@ Item {
         interval: 60
         onTriggered: {
             const p = root.herePath
-            if (p.length > 0) Core.call("stat", { paths: [p] }, r => { if (r.ok && r.entries.length > 0 && p === root.herePath) root.here = r.entries[0] })
+            const adm = root.folder && root.folder.admin === true
+            if (p.length > 0) Core.call("stat", { paths: [p], admin: adm }, r => { if (root && r.ok && r.entries.length > 0 && p === root.herePath) root.here = r.entries[0] })
         }
     }
     Connections {
@@ -188,6 +189,7 @@ Item {
                 height: implicitHeight
                 visible: !root.many && !root.placeOnly && !!root.entry
                 entry: root.many || root.placeOnly ? null : root.entry
+                admin: !!root.folder && root.folder.admin
             }
 
             // Several chosen: their icons stacked like cards.

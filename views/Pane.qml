@@ -477,6 +477,13 @@ FocusScope {
                     onClicked: root.closeFilter()
                 }
                 Pill {
+                    visible: root.blank === "error" && folder.error === "denied" && !folder.admin
+                    kind: "solid"
+                    text: I18n.tr("Open as Administrator")
+                    glyph: "admin_panel_settings"
+                    onClicked: root.browser.actions.openAsAdmin(root, folder.path)
+                }
+                Pill {
                     visible: root.blank === "error" && folder.error === "missing"
                     text: I18n.tr("Go up")
                     glyph: "arrow_upward"
