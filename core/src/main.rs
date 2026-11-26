@@ -9,6 +9,7 @@ mod fm1;
 mod info;
 mod jobs;
 mod list;
+mod localsend;
 mod markdown;
 mod mime;
 mod places;
@@ -56,6 +57,7 @@ pub struct Ctx {
     pub talks: remote::Talks,
     pub portal: portal::Registry,
     pub admin: admin::Admin,
+    pub localsend: localsend::LocalSend,
     cancels: Mutex<HashMap<String, Arc<AtomicBool>>>,
 }
 
@@ -126,6 +128,19 @@ fn handle(ctx: &Arc<Ctx>, req: Value) {
         "admin_start" => ctx.admin.start(ctx),
         "admin_stop" => ctx.admin.stop(ctx),
         "admin_status" => Ok(json!({"active": ctx.admin.active()})),
+        "localsend_start" => ctx.localsend.start(ctx),
+        "localsend_stop" => {
+            ctx.localsend.stop(ctx);
+            Ok(ctx.localsend.status())
+        }
+        "localsend_status" => Ok(ctx.localsend.status()),
+        "localsend_config" => ctx.localsend.configure(ctx, &req),
+        "localsend_scan" => ctx.localsend.scan(ctx),
+        "localsend_probe" => ctx.localsend.probe_manual(ctx, req["host"].as_str().unwrap_or(""), req["port"].as_u64().unwrap_or(53317) as u16),
+        "localsend_send" => ctx.localsend.send_files(ctx, &req),
+        "localsend_accept" => ctx.localsend.respond_offer(req["sessionId"].as_str().unwrap_or(""), true, req["dest"].as_str()),
+        "localsend_decline" => ctx.localsend.respond_offer(req["sessionId"].as_str().unwrap_or(""), false, None),
+        "localsend_cancel" => ctx.localsend.cancel_transfer(req["id"].as_str().unwrap_or("")),
         "ping" => Ok(json!({})),
         "list" => match list::list(ctx, &req) {
             Ok((v, counts)) => {
@@ -254,6 +269,7 @@ fn main() {
         talks: remote::Talks::default(),
         portal: portal::Registry::default(),
         admin: admin::Admin::default(),
+        localsend: localsend::LocalSend::default(),
         cancels: Mutex::new(HashMap::new()),
     });
     thumbs::start(ctx.clone());

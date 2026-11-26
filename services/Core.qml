@@ -13,6 +13,13 @@ Singleton {
     readonly property string home: Quickshell.env("HOME") ?? "/"
     property bool ready: false
     property bool adminActive: false
+    property bool localSendRunning: false
+    property string localSendAlias: ""
+    property int localSendPort: 0
+    property string localSendSaveDir: ""
+    property var localSendPeers: []
+    property var localSendTransfers: ({})
+    property bool localSendScanning: false
     property var places: ({ home: root.home, xdg: [], bookmarks: [], devices: [], network: [], trash: 0 })
     // Jobs at work and just finished, by id: the last event of each.
     property var jobs: ({})
@@ -39,6 +46,9 @@ Singleton {
     // XDG Desktop Portal FileChooser request (Discord, Firefox, Chrome, etc.).
     signal chooserRequested(var req)
     signal chooserCancelled(string token)
+    // LocalSend v2.1 incoming offer & transfer updates.
+    signal localSendOffer(var offer)
+    signal localSendTransferEvent(var transfer)
 
     function call(op: string, args: var, done: var): int {
         const id = root.nextId++
@@ -77,6 +87,48 @@ Singleton {
             root.adminActive = false
             if (done) done(r)
         })
+    }
+    function applyLocalSendStatus(s: var): void {
+        if (!s) return
+        root.localSendRunning = s.running === true
+        root.localSendAlias = s.alias ?? ""
+        root.localSendPort = Number(s.port ?? 0)
+        if (s.saveDir) root.localSendSaveDir = s.saveDir
+        if (s.peers) root.localSendPeers = s.peers
+    }
+    function syncLocalSend(): void {
+        if (!root.ready) return
+        root.call("localsend_config", {
+            autoAccept: Prefs.localsendAutoAccept === true,
+            alias: Prefs.localsendAlias ?? ""
+        }, r => {
+            if (r.ok) root.applyLocalSendStatus(r)
+            if (Prefs.localsend === true) {
+                root.call("localsend_start", {}, s => { if (s.ok) root.applyLocalSendStatus(s) })
+            } else if (root.localSendRunning) {
+                root.call("localsend_stop", {}, s => { if (s.ok) root.applyLocalSendStatus(s) })
+            }
+        })
+    }
+    function scanLocalSend(): void {
+        if (!root.ready) return
+        root.localSendScanning = true
+        root.call("localsend_scan", {}, r => { if (!r.ok) root.localSendScanning = false })
+    }
+    function forgetLocalSendTransfer(id: string): void {
+        const m = Object.assign({}, root.localSendTransfers)
+        delete m[id]
+        root.localSendTransfers = m
+    }
+    Connections {
+        target: Prefs
+        function onLocalsendChanged() { root.syncLocalSend() }
+        function onLocalsendAutoAcceptChanged() {
+            if (root.ready) root.call("localsend_config", { autoAccept: Prefs.localsendAutoAccept === true }, r => { if (r.ok) root.applyLocalSendStatus(r) })
+        }
+        function onLocalsendAliasChanged() {
+            if (root.ready) root.call("localsend_config", { alias: Prefs.localsendAlias ?? "" }, r => { if (r.ok) root.applyLocalSendStatus(r) })
+        }
     }
     function forgetJob(id: int): void {
         const j = Object.assign({}, root.jobs)
@@ -277,6 +329,7 @@ Singleton {
             root.queue = []
             root.refreshPlaces()
             watchSync.restart()
+            if (Prefs.localsend === true) root.syncLocalSend()
             break
         case "thumb": root.gotThumb(m); break
         case "counts": root.counts(m.path, m.counts); break
@@ -303,6 +356,20 @@ Singleton {
         case "chooser": root.chooserRequested(m); break
         case "chooser_cancel": root.chooserCancelled(m.token ?? ""); break
         case "admin": root.adminActive = m.active === true; break
+        case "localsend_status": root.applyLocalSendStatus(m); break
+        case "localsend_peers": root.localSendPeers = m.peers ?? []; break
+        case "localsend_scan":
+            root.localSendScanning = false
+            if (m.peers) root.localSendPeers = m.peers
+            break
+        case "localsend_offer": root.localSendOffer(m); break
+        case "localsend_transfer": {
+            const t = Object.assign({}, root.localSendTransfers)
+            t[m.id] = m
+            root.localSendTransfers = t
+            root.localSendTransferEvent(m)
+            break
+        }
         }
     }
 

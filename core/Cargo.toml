@@ -24,6 +24,9 @@ pulldown-cmark = { version = "0.13", default-features = false }
 # org.freedesktop.FileManager1 and org.freedesktop.impl.portal.FileChooser: pure Rust D-Bus.
 zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
 async-io = "2"
+# LocalSend v2.1 HTTPS transport (self-signed TLS, pure Rust, zero OpenSSL C dependency).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rcgen = { version = "0.13", default-features = false, features = ["crypto", "ring"] }
 
 [profile.release]
 opt-level = 3

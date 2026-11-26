@@ -37,6 +37,8 @@ SelectSheet 1.0 SelectSheet.qml
 SettingsSheet 1.0 SettingsSheet.qml
 SpaceSheet 1.0 SpaceSheet.qml
 CommandPalette 1.0 CommandPalette.qml
+LocalSendSheet 1.0 LocalSendSheet.qml
+LocalSendOfferSheet 1.0 LocalSendOfferSheet.qml
 Browser 1.0 Browser.qml
 Media 1.0 Media.qml
 Player 1.0 Player.qml

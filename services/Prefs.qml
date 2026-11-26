@@ -39,6 +39,9 @@ Singleton {
         startSections: ({ banner: true, places: true, drives: true, recent: true, bookmarks: false }),
         restoreTabs: true,
         typeAhead: true,
+        localsend: true,        // auto-discover & receive LocalSend v2.1 devices on LAN
+        localsendAutoAccept: false,
+        localsendAlias: "",
         marks: ({}),            // a bookmark's own look: { path: { glyph, tint } }
         fold: ({})              // rail sections folded away: { bookmarks, devices, network }
     })
@@ -76,6 +79,9 @@ Singleton {
     property var startSections: root.initVal("startSections")
     property bool restoreTabs: root.initVal("restoreTabs") === true
     property bool typeAhead: root.initVal("typeAhead") === true
+    property bool localsend: root.initVal("localsend") === true
+    property bool localsendAutoAccept: root.initVal("localsendAutoAccept") === true
+    property string localsendAlias: String(root.initVal("localsendAlias"))
     property var marks: root.initVal("marks")
     property var fold: root.initVal("fold")
 

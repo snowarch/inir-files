@@ -106,8 +106,18 @@ Item {
         meter: n.size > 0 ? 1 - n.free / n.size : -1, detail: n.size > 0 ? I18n.tr("%1 free of %2", Fmt.size(n.free), Fmt.size(n.size)) : n.fstype
     }))
 
+    readonly property var localSendPlace: ({
+        path: "", name: I18n.tr("LocalSend"), glyph: "wifi_tethering", kind: "localsend",
+        count: Core.localSendPeers.length,
+        detail: Core.localSendRunning
+            ? (Core.localSendPeers.length > 0
+                ? I18n.n("%1 nearby device", "%1 nearby devices", Core.localSendPeers.length)
+                : I18n.tr("Listening on port %1", Core.localSendPort))
+            : I18n.tr("Nearby sharing is off")
+    })
     readonly property var connectPlace: ({ path: "", name: I18n.tr("Connect a server"), glyph: "add_link", kind: "connect" })
     function open(item: var, newTab: bool): void {
+        if (item.kind === "localsend") { root.browser.actions.openLocalSend([]); return }
         if (item.kind === "connect" || item.remote) { root.browser.actions.connect(item.remote ? item.path : "", newTab); return }
         if (item.kind === "device" && !item.mounted) {
             Core.call("mount", { device: item.device }, r => {
@@ -330,10 +340,11 @@ Item {
             }
             onTranslationChanged: if (active) root.dragTo = Math.max(0, Math.min(root.marks.length - 1, place.index + Math.round(translation.y / place.height)))
         }
-        // A drop goes into the place; on a bookmark's top or bottom edge, a folder joins the bookmarks there.
+        // A drop goes into the place; on a bookmark's top or bottom edge, a folder joins the bookmarks there;
+        // on LocalSend, dropped files open the nearby share sheet ready to send.
         DropArea {
             anchors.fill: parent
-            enabled: place.it.kind !== "recent" && place.it.kind !== "start" && place.it.kind !== "connect" && (place.mark || !place.it.missing) && (place.it.kind !== "device" || place.it.mounted)
+            enabled: place.it.kind !== "recent" && place.it.kind !== "start" && place.it.kind !== "connect" && (place.it.kind === "localsend" || place.mark || !place.it.missing) && (place.it.kind !== "device" || place.it.mounted)
             function slot(y: real): int {
                 if (!place.mark) return -1
                 if (y < place.height * 0.3) return place.index
@@ -341,6 +352,10 @@ Item {
                 return -1
             }
             function aim(drag: var): void {
+                if (place.it.kind === "localsend") {
+                    place.dropping = root.browser.actions.pathsOf(drag.urls).length > 0
+                    return
+                }
                 const s = slot(drag.y)
                 if (s >= 0 || root.insertBy === place) { root.insertAt = s; root.insertBy = s >= 0 ? place : null }
                 place.dropping = s < 0 && !place.it.missing && !place.it.remote && !root.browser.actions.dropRefused(drag.urls, place.it.path)
@@ -355,6 +370,15 @@ Item {
                 if (root.insertBy === place) { root.insertAt = -1; root.insertBy = null }
             }
             onDropped: drop => {
+                if (place.it.kind === "localsend") {
+                    place.dropping = false
+                    const dropped = root.browser.actions.pathsOf(drop.urls)
+                    if (dropped.length > 0) {
+                        drop.accept(Qt.CopyAction)
+                        root.browser.actions.openLocalSend(dropped)
+                    }
+                    return
+                }
                 const s = slot(drop.y)
                 place.dropping = false
                 root.insertAt = -1
@@ -366,7 +390,7 @@ Item {
         // Held over a place while dragging, it opens, so the drop can go deeper.
         Timer {
             interval: 900
-            running: place.dropping && place.it.path !== "trash:"
+            running: place.dropping && place.it.path !== "trash:" && place.it.kind !== "localsend"
             onTriggered: { place.dropping = false; root.open(place.it, false) }
         }
         // The room on a disk shows in the window's tip, over the rows, never under the row below.
@@ -386,6 +410,10 @@ Item {
         const out = []
         if (it.kind === "device" && !it.mounted) return [{ text: I18n.tr("Mount"), glyph: "hard_drive", run: () => root.open(it, false) }]
         out.push({ text: I18n.tr("Open in new tab"), glyph: "tab", run: () => root.open(it, true) })
+        if (it.kind === "localsend") return [
+            { text: I18n.tr("Open LocalSend"), glyph: "wifi_tethering", run: () => root.browser.actions.openLocalSend([]) },
+            { text: I18n.tr("Scan network"), glyph: "radar", run: () => Core.scanLocalSend() }
+        ]
         if (it.kind === "connect") return [{ text: it.name, glyph: it.glyph, run: () => root.open(it, false) }]
         if (it.remote) {
             out.push({ separator: true })
@@ -509,7 +537,7 @@ Item {
             Column {
                 width: col.width
                 visible: !root.folded("network")
-                Repeater { model: root.shares.concat([root.connectPlace]); delegate: Place {} }
+                Repeater { model: root.shares.concat([root.localSendPlace, root.connectPlace]); delegate: Place {} }
             }
         }
     }

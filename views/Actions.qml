@@ -377,10 +377,49 @@ Item {
     function redo(): void { if (Undo.canRedo) Undo.redo(root.browser) }
     // One connection at a time: a second click on a server while the first waits does nothing.
     property var connecting: null
+    property var pendingLocalSend: ({})
     function connect(address: var, newTab: var): void {
         if (root.connecting) return
         root.connecting = root.sheet(connectSheet, { address: address ?? "", newTab: newTab === true, delay: address ? 300 : 0 })
         if (root.connecting) root.connecting.dismissed.connect(() => root.connecting = null)
+    }
+    function openLocalSend(paths: var): void {
+        root.sheet(localSendSheet, { paths: paths ?? [] })
+    }
+    function sendLocalSend(peer: var, paths: var, pin: var): void {
+        if (!peer || !paths || paths.length === 0) return
+        const req = {
+            fingerprint: peer.fingerprint ?? "",
+            ip: peer.ip ?? "",
+            port: peer.port ?? 53317,
+            protocol: peer.protocol ?? "https",
+            alias: peer.alias ?? peer.ip ?? "",
+            paths: paths
+        }
+        if (typeof pin === "string" && pin.length > 0) req.pin = pin
+        Core.call("localsend_send", req, r => {
+            if (!root) return
+            if (!r.ok) { root.fail(r.error); return }
+            if (r.transfer) {
+                const m = Object.assign({}, root.pendingLocalSend)
+                m[r.transfer] = { peer: peer, paths: paths }
+                root.pendingLocalSend = m
+            }
+            Toast.show(I18n.tr("Sending to %1…", peer.alias || peer.ip), "", null)
+        })
+    }
+    function localSendEntries(paths: var): var {
+        const peers = Core.localSendPeers ?? []
+        if (peers.length === 0) return [{ text: I18n.tr("Send via LocalSend…"), glyph: "wifi_tethering", run: () => root.openLocalSend(paths) }]
+        const sub = peers.map(p => ({
+            text: p.alias || p.ip,
+            glyph: p.deviceType === "mobile" ? "smartphone" : p.deviceType === "web" ? "language" : "computer",
+            note: p.deviceModel || p.ip,
+            run: () => root.sendLocalSend(p, paths, "")
+        }))
+        sub.push({ separator: true })
+        sub.push({ text: I18n.tr("Nearby devices…"), glyph: "radar", run: () => root.openLocalSend(paths) })
+        return [{ text: I18n.tr("Send via LocalSend"), glyph: "wifi_tethering", sub: sub }]
     }
     function selectByName(pane: var): void { if (pane) root.sheet(selectSheet, { pane: pane }) }
     function analyzeSpace(pane: var): void { if (pane) root.sheet(spaceSheet, { pane: pane, startPath: root.here(pane) || Core.home }) }
@@ -443,6 +482,7 @@ Item {
             { text: I18n.tr("Split view"), glyph: "vertical_split", keys: "F3", checked: page ? page.split : false, run: () => page && page.toggleSplit() },
             { text: I18n.tr("Analyze disk space"), glyph: "donut_large", keys: "Ctrl+Shift+U", enabled: root.here(pane).length > 0, run: () => root.analyzeSpace(pane) },
             { text: I18n.tr("Command palette"), glyph: "bolt", keys: "Ctrl+K", run: () => root.browser.palette.open("") },
+            { text: I18n.tr("LocalSend"), glyph: "wifi_tethering", run: () => root.openLocalSend([]) },
             { text: I18n.tr("Connect to server…"), glyph: "add_link", run: () => root.connect("", false) },
             pane && pane.folder.admin
                 ? { text: I18n.tr("Exit administrator mode"), glyph: "logout", run: () => root.exitAdmin(pane) }
@@ -534,6 +574,7 @@ Item {
             out.push({ text: list.length > 1 ? I18n.tr("Rename all…") : I18n.tr("Rename"), glyph: "edit", keys: "F2", enabled: writable, run: () => root.rename(pane) })
             out.push({ text: I18n.tr("Compress…"), glyph: "folder_zip", enabled: root.here(pane).length > 0, run: () => root.compress(pane) })
             if (archives.length > 0) out.push({ text: I18n.tr("Extract here"), glyph: "unarchive", enabled: root.here(pane).length > 0 && f.writable, run: () => root.extract(pane, "") })
+            for (const ls of root.localSendEntries(paths)) out.push(ls)
             out.push({ separator: true })
             out.push({ text: I18n.tr("Copy path"), glyph: "link", keys: "Ctrl+Shift+C", run: () => root.copyText(paths.join("\n")) })
             if (one && one.dir) {
@@ -572,6 +613,36 @@ Item {
         target: Core
         function onConflict(q) { if (root.mine(q.job)) root.sheet(conflictSheet, { question: q }) }
         function onFailed(op, error) { if (root.browser.windowActive) root.fail(error) }
+        function onLocalSendOffer(offer) {
+            if (root.browser.windowActive) root.sheet(localSendOfferSheet, { offer: offer })
+        }
+        function onLocalSendTransferEvent(t) {
+            if (!root.browser.windowActive) return
+            if (t.state === "pin") {
+                const ctx = root.pendingLocalSend[t.id]
+                if (!ctx) return
+                root.sheet(confirmSheet, {
+                    title: I18n.tr("PIN required by %1", t.peer ?? ""),
+                    subtitle: I18n.tr("Enter the LocalSend PIN shown on the other device."),
+                    field: true,
+                    fieldText: "",
+                    choices: [{ text: I18n.tr("Send"), kind: "solid", run: pin => root.sendLocalSend(ctx.peer, ctx.paths, pin) }]
+                })
+                return
+            }
+            if (t.state === "done") {
+                if (t.direction === "receive") {
+                    const dest = t.dest ?? ""
+                    Toast.show(I18n.tr("Received from %1", t.peer ?? ""), dest.length > 0 ? I18n.tr("Open") : "", dest.length > 0 ? () => { if (root.browser.activePane) root.browser.activePane.folder.go(dest) } : null)
+                } else {
+                    Toast.show(I18n.tr("Sent to %1", t.peer ?? ""), "", null)
+                }
+            } else if (t.state === "rejected") {
+                Toast.fail(I18n.tr("%1 declined the transfer", t.peer ?? ""))
+            } else if (t.state === "failed") {
+                Toast.fail(I18n.tr("Transfer with %1 failed", t.peer ?? ""))
+            }
+        }
         function onJobEvent(j) {
             if (j.state !== "done" && j.state !== "failed") return
             const note = Core.jobNotes[j.job]
@@ -612,5 +683,7 @@ Item {
     Component { id: selectSheet; SelectSheet {} }
     Component { id: spaceSheet; SpaceSheet {} }
     Component { id: connectSheet; ConnectSheet { ops: root } }
+    Component { id: localSendSheet; LocalSendSheet { browser: root.browser } }
+    Component { id: localSendOfferSheet; LocalSendOfferSheet { browser: root.browser } }
     Component { id: settingsSheet; SettingsSheet {} }
 }

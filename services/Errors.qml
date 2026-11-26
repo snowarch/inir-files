@@ -33,6 +33,9 @@ Singleton {
         case "admin_cancelled": return I18n.tr("Authentication was cancelled")
         case "admin_failed": return I18n.tr("Could not start administrator mode")
         case "admin_inactive": return I18n.tr("Administrator session ended")
+        case "localsend_off": return I18n.tr("LocalSend is turned off")
+        case "localsend_unreachable": return I18n.tr("No LocalSend device answered at that address")
+        case "localsend_nopeer": return I18n.tr("That LocalSend device is no longer available")
         default: return code && code.length > 0 ? code : I18n.tr("Something went wrong")
         }
     }

@@ -156,6 +156,30 @@ Sheet {
                     }
                 }
 
+                Head { text: I18n.tr("Nearby sharing") }
+                Setting {
+                    label: I18n.tr("LocalSend")
+                    hint: I18n.tr("Discover LocalSend devices on your local network and send or receive files.")
+                    Switch { key: "localsend" }
+                }
+                Setting {
+                    visible: Prefs.localsend
+                    label: I18n.tr("Auto-accept incoming files")
+                    hint: I18n.tr("Save files from nearby LocalSend devices straight to Downloads without asking.")
+                    Switch { key: "localsendAutoAccept" }
+                }
+                Setting {
+                    visible: Prefs.localsend
+                    label: I18n.tr("Device name")
+                    hint: I18n.tr("Empty: uses this computer's hostname.")
+                    Field {
+                        width: Theme.dp(200)
+                        text: Prefs.localsendAlias
+                        placeholder: Core.localSendAlias || I18n.tr("This computer")
+                        onEdited: Prefs.set("localsendAlias", text.trim())
+                    }
+                }
+
                 Head { text: I18n.tr("Terminal") }
                 Setting {
                     label: I18n.tr("Terminal command")

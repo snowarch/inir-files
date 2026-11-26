@@ -143,6 +143,7 @@ Item {
         cmd(I18n.tr("Show hidden files"), "visibility", "Ctrl+H", () => Prefs.set("hidden", !Prefs.get("hidden")))
         cmd(I18n.tr("Preview"), "view_sidebar", "Ctrl+I", () => Prefs.set("aside", !Prefs.get("aside")))
         cmd(I18n.tr("Places"), "side_navigation", "F9", () => b.toggleRail())
+        cmd(I18n.tr("LocalSend"), "wifi_tethering", "", () => b.actions.openLocalSend([]))
         cmd(I18n.tr("Connect to server…"), "add_link", "", () => b.actions.connect("", false))
         cmd(Theme.light ? I18n.tr("Dark") : I18n.tr("Light"), Theme.light ? "dark_mode" : "light_mode", "", () => Prefs.set("scheme", Theme.light ? "dark" : "light"))
         cmd(I18n.tr("Settings"), "settings", "Ctrl+,", () => b.actions.settings())

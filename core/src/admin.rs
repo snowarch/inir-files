@@ -199,6 +199,7 @@ pub fn run_helper() {
         talks: crate::remote::Talks::default(),
         portal: crate::portal::Registry::default(),
         admin: Admin::default(),
+        localsend: crate::localsend::LocalSend::default(),
         cancels: Mutex::new(HashMap::new()),
     });
 
