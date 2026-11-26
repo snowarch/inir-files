@@ -18,6 +18,7 @@ use std::sync::{Arc, Condvar, Mutex};
 struct Job {
     path: PathBuf,
     size: String,
+    ahead: bool,
 }
 
 // What waits, and a set of it so an ask need not walk the line. The far end goes when the line is full.
@@ -27,7 +28,7 @@ struct Line {
     held: HashSet<(PathBuf, String)>,
 }
 
-const LINE_CAP: usize = 8000;
+const LINE_CAP: usize = 1024;
 
 struct Thumbnailer {
     mimes: Vec<String>,
@@ -172,8 +173,20 @@ impl Thumbs {
 
     /// Asks for pictures. What is on screen goes to the head of the line, the newest first. Asked `ahead` (the rest of
     /// a folder, before it is scrolled to), they go to the far end in the order given, and only when not already asked.
-    pub fn request(&self, paths: Vec<PathBuf>, size: &str, ahead: bool) {
+    /// When `replace_ahead` is true (a new folder), stale background prefetch jobs from previous folders are dropped.
+    pub fn request(&self, paths: Vec<PathBuf>, size: &str, ahead: bool, replace_ahead: bool) {
         let mut q = self.queue.lock().unwrap();
+        if replace_ahead {
+            let mut kept = VecDeque::with_capacity(q.jobs.len());
+            while let Some(j) = q.jobs.pop_front() {
+                if j.ahead {
+                    q.held.remove(&(j.path, j.size));
+                } else {
+                    kept.push_back(j);
+                }
+            }
+            q.jobs = kept;
+        }
         for path in paths {
             let key = (path, size.to_string());
             if q.held.contains(&key) {
@@ -181,12 +194,13 @@ impl Thumbs {
                     continue;
                 }
                 if let Some(at) = q.jobs.iter().rposition(|j| j.path == key.0 && j.size == key.1) {
-                    let job = q.jobs.remove(at).unwrap();
+                    let mut job = q.jobs.remove(at).unwrap();
+                    job.ahead = false;
                     q.jobs.push_back(job);
                 }
                 continue;
             }
-            let job = Job { path: key.0.clone(), size: key.1.clone() };
+            let job = Job { path: key.0.clone(), size: key.1.clone(), ahead };
             q.held.insert(key);
             if ahead { q.jobs.push_front(job) } else { q.jobs.push_back(job) }
         }
@@ -206,11 +220,28 @@ impl Thumbs {
     }
 }
 
-// A worker on every core but one, each at a lower priority than the interface: a folder of photos fills in fast, and
-// scrolling it never waits behind a picture being made. The tools a worker starts take its priority.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn trim_heap() {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    static LAST: AtomicU64 = AtomicU64::new(0);
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let prev = LAST.load(Ordering::Relaxed);
+    if now.saturating_sub(prev) >= 2 && LAST.compare_exchange(prev, now, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+        extern "C" {
+            fn malloc_trim(pad: libc::size_t) -> libc::c_int;
+        }
+        unsafe { malloc_trim(0); }
+    }
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+fn trim_heap() {}
+
+// Workers at lower priority than the interface: bounded to avoid multiplying glibc malloc arenas and peak decode RAM.
 pub fn start(ctx: Arc<Ctx>) {
     let cores = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
-    for _ in 0..(cores.saturating_sub(1)).clamp(2, 12) {
+    for _ in 0..(cores / 2).clamp(2, 6) {
         let ctx = ctx.clone();
         std::thread::spawn(move || loop {
             unsafe {
@@ -229,6 +260,9 @@ pub fn start(ctx: Arc<Ctx>) {
             };
             let file = make(&ctx, &job.path, &job.size).unwrap_or_default();
             ctx.out.event("thumb", json!({"path": job.path.to_string_lossy(), "size": job.size, "file": file}));
+            if ctx.thumbs.queue.lock().unwrap().jobs.is_empty() {
+                trim_heap();
+            }
         });
     }
 }

@@ -480,7 +480,7 @@ Item {
             }
             if (dirs.length === 0 || one) out.push({ text: I18n.tr("Open with"), glyph: "apps", sub: root.openWithEntries(list, apps) })
             if (one && (one.kind === "image" || one.kind === "video")) out.push({ text: I18n.tr("Set as wallpaper"), glyph: "wallpaper", run: () => root.setWallpaper(one.path) })
-            if (f.mode === "search" || f.mode === "recent" || f.mode === "start") out.push({ text: I18n.tr("Show in folder"), glyph: "folder_open", enabled: !!one, run: () => { f.go(Fmt.parent(one.path)); f.focusPath = one.path } })
+            if (f.mode === "search" || f.mode === "recent" || f.mode === "start") out.push({ text: I18n.tr("Show in folder"), glyph: "folder_open", enabled: !!one, run: () => { f.focusPath = one.path; f.go(Fmt.parent(one.path)) } })
             out.push({ separator: true })
             out.push({ text: I18n.tr("Cut"), glyph: "content_cut", keys: "Ctrl+X", enabled: writable, run: () => root.cut(pane) })
             out.push({ text: I18n.tr("Copy"), glyph: "content_copy", keys: "Ctrl+C", run: () => root.copy(pane) })

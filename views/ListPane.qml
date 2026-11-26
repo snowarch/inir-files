@@ -170,7 +170,7 @@ Item {
             boundsBehavior: Flickable.StopAtBounds
             flickableDirection: Flickable.AutoFlickDirection
             contentWidth: root.contentWidth
-            cacheBuffer: Math.max(0, root.rowHeight * 20)
+            cacheBuffer: Math.max(0, root.rowHeight * 12)
             reuseItems: true
             model: root.folder.model
             currentIndex: -1

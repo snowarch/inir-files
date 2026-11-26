@@ -81,10 +81,13 @@ Item {
         width: root.size + root.grow
         height: width
         visible: root.showThumb
-        source: root.thumbFile.length > 0 && !root.dir ? Fmt.url(root.thumbFile) + "?" + root.mtime : ""
+        // Release decoded bitmaps when hidden (inactive tabs) and disable Qt's unbounded global pixmap cache
+        // so browsing photo folders never accumulates hundreds of MB across directories.
+        source: root.visible && root.thumbFile.length > 0 && !root.dir ? Fmt.url(root.thumbFile) + "?" + root.mtime : ""
         fillMode: root.crop ? Image.PreserveAspectCrop : Image.PreserveAspectFit
         clip: root.crop
         asynchronous: true
+        cache: false
         smooth: true
         // Bucket-sized decode: zooming inside a bucket never drops and re-decodes the texture.
         sourceSize.width: root.thumbPx

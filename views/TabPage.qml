@@ -11,7 +11,9 @@ Item {
     property bool split: false
     property real ratio: 0.5
     property var activePane: first
-    readonly property var panes: root.split ? [first, second] : [first]
+    property string pendingSplitPlace: ""
+    readonly property var secondPane: secondLoader.item
+    readonly property var panes: root.split && root.secondPane ? [first, root.secondPane] : [first]
     readonly property string title: root.titleOf(root.activePane.folder)
     readonly property string glyph: root.glyphOf(root.activePane.folder)
 
@@ -34,29 +36,41 @@ Item {
         return "folder"
     }
     function openSplit(place: string): void {
-        second.folder.go(place && place.length > 0 ? place : root.activePane.folder.place, false)
-        root.split = true
-        second.activate()
+        const dest = place && place.length > 0 ? place : root.activePane.folder.place
+        root.pendingSplitPlace = dest
+        if (!root.split) {
+            root.split = true
+            if (root.secondPane) {
+                root.secondPane.folder.go(dest, false)
+                root.secondPane.activate()
+            }
+        } else if (root.secondPane) {
+            root.secondPane.folder.go(dest, false)
+            root.secondPane.activate()
+        }
     }
     function toggleSplit(): void {
         if (!root.split) {
             root.openSplit(root.activePane.folder.place)
         } else {
             const keep = root.activePane
+            const secondPlace = root.secondPane ? root.secondPane.folder.place : ""
+            root.activePane = first
             root.split = false
-            if (keep === second) first.folder.go(second.folder.place)
+            if (keep !== first && secondPlace.length > 0) first.folder.go(secondPlace)
             first.activate()
+            Qt.callLater(gc)
         }
     }
     function detachPane(pane: var): void {
-        if (!root.split) return
+        if (!root.split || !root.secondPane) return
         const place = pane.folder.place
-        const keep = pane === first ? second : first
+        const keep = pane === first ? root.secondPane : first
         root.activePane = keep
         root.toggleSplit()
         root.browser.newWindow(place)
     }
-    function otherPane(pane: var): var { return root.split ? (pane === first ? second : first) : null }
+    function otherPane(pane: var): var { return root.split && root.secondPane ? (pane === first ? root.secondPane : first) : null }
     Component.onCompleted: {
         first.folder.choose = root.startChosen
         first.folder.go(root.startPath, false)
@@ -109,7 +123,7 @@ Item {
                 glyphSize: Theme.dp(15)
                 glyph: "close"
                 tip: I18n.tr("Close this side")
-                onClicked: { root.activePane = strip.pane === first ? second : first; root.toggleSplit() }
+                onClicked: { root.activePane = strip.pane === first ? (root.secondPane ?? first) : first; root.toggleSplit() }
             }
         }
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.line }
@@ -166,14 +180,28 @@ Item {
         x: left.width + 1
         width: root.width - left.width - 1
         height: root.height
-        Strip { id: rightStrip; pane: second; width: parent.width }
-        Pane {
-            id: second
-            browser: root.browser
-            page: root
-            anchors.top: rightStrip.bottom
+        Loader {
+            id: rightStripLoader
+            active: root.split && !!root.secondPane
+            width: parent.width
+            height: active ? Theme.dp(30) : 0
+            sourceComponent: Strip { pane: root.secondPane; width: parent.width }
+        }
+        Loader {
+            id: secondLoader
+            active: root.split
+            anchors.top: rightStripLoader.bottom
             anchors.bottom: parent.bottom
             width: parent.width
+            sourceComponent: Pane {
+                browser: root.browser
+                page: root
+            }
+            onLoaded: {
+                const dest = root.pendingSplitPlace.length > 0 ? root.pendingSplitPlace : first.folder.place
+                item.folder.go(dest, false)
+                item.activate()
+            }
         }
     }
 }

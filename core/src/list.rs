@@ -8,7 +8,20 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
+
+fn cached_roles() -> HashMap<PathBuf, &'static str> {
+    static CACHE: OnceLock<Mutex<(Instant, HashMap<PathBuf, &'static str>)>> = OnceLock::new();
+    let lock = CACHE.get_or_init(|| Mutex::new((Instant::now() - Duration::from_secs(60), HashMap::new())));
+    let mut guard = lock.lock().unwrap();
+    if guard.0.elapsed() > Duration::from_secs(5) {
+        guard.1 = crate::places::roles();
+        guard.0 = Instant::now();
+    }
+    guard.1.clone()
+}
 
 pub fn error_code(e: &std::io::Error) -> String {
     use std::io::ErrorKind::*;
@@ -149,17 +162,23 @@ pub fn sort(entries: &mut [Value], key: &str, desc: bool, dirs_first: bool) {
 }
 
 /// The folder sizes a listing asks for: counted after its reply has gone out, so the first count never arrives before
-/// the rows it belongs to.
+/// the rows it belongs to. Stops cooperatively when the pane navigates to another folder.
 pub struct Counts {
     folder: String,
     dirs: Vec<PathBuf>,
     hidden: bool,
+    token: String,
 }
 
 impl Counts {
     pub fn spawn(self, ctx: &Arc<Ctx>) {
         let ctx = ctx.clone();
-        std::thread::spawn(move || counts(&ctx, &self.folder, self.dirs, self.hidden));
+        let flag = ctx.token(&self.token);
+        let token = self.token;
+        std::thread::spawn(move || {
+            counts(&ctx, &self.folder, self.dirs, self.hidden, &flag);
+            ctx.release(&token, &flag);
+        });
     }
 }
 
@@ -171,14 +190,14 @@ pub fn list(ctx: &Arc<Ctx>, req: &Value) -> Result<(Value, Option<Counts>), Stri
     let path = PathBuf::from(if raw.is_empty() { util::home().to_string_lossy().into_owned() } else { raw.to_string() });
     let show_hidden = req["hidden"].as_bool().unwrap_or(false);
     let rd = fs::read_dir(&path).map_err(|e| error_code(&e))?;
-    let roles = crate::places::roles();
+    let roles = cached_roles();
     let dh = dot_hidden(&path);
     let names: Vec<PathBuf> = rd.flatten().map(|de| de.path()).collect();
     let read = |part: &[PathBuf]| part.iter().filter_map(|p| entry(ctx, p, &roles, &dh)).collect::<Vec<_>>();
     let all: Vec<Value> = if names.len() < SPLIT_AT {
         read(&names)
     } else {
-        let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(2, 8);
+        let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(2, 6);
         let chunk = names.len().div_ceil(threads);
         std::thread::scope(|s| {
             let parts: Vec<_> = names.chunks(chunk).map(|part| s.spawn(|| read(part))).collect();
@@ -198,11 +217,17 @@ pub fn list(ctx: &Arc<Ctx>, req: &Value) -> Result<(Value, Option<Counts>), Stri
     }
     // Each folder's item count follows, read off the reply's thread: a folder of folders shows at once.
     let mut follow = None;
+    let pane = req["pane"].as_str().unwrap_or("default");
+    let token = format!("counts:{pane}");
     if !remote && req["counts"].as_bool().unwrap_or(true) {
         let dirs: Vec<PathBuf> = entries.iter().filter(|e| e["dir"].as_bool().unwrap_or(false)).map(|e| PathBuf::from(e["path"].as_str().unwrap_or(""))).collect();
         if !dirs.is_empty() {
-            follow = Some(Counts { folder: path.to_string_lossy().into_owned(), dirs, hidden: show_hidden });
+            follow = Some(Counts { folder: path.to_string_lossy().into_owned(), dirs, hidden: show_hidden, token });
+        } else {
+            ctx.cancel(&token);
         }
+    } else {
+        ctx.cancel(&token);
     }
     let reply = json!({
         "path": path.to_string_lossy(),
@@ -215,25 +240,31 @@ pub fn list(ctx: &Arc<Ctx>, req: &Value) -> Result<(Value, Option<Counts>), Stri
     Ok((reply, follow))
 }
 
-fn counts(ctx: &Ctx, folder: &str, dirs: Vec<PathBuf>, show_hidden: bool) {
+fn counts(ctx: &Ctx, folder: &str, dirs: Vec<PathBuf>, show_hidden: bool, stop: &AtomicBool) {
     let mut batch = serde_json::Map::new();
     let mut last = std::time::Instant::now();
     for d in dirs {
+        if stop.load(Ordering::Relaxed) {
+            return;
+        }
         let n = fs::read_dir(&d).map(|rd| rd.flatten().filter(|e| show_hidden || !e.file_name().to_string_lossy().starts_with('.')).count() as i64).unwrap_or(-1);
         batch.insert(util::name_of(&d), json!(n));
         if last.elapsed().as_millis() > 120 {
+            if stop.load(Ordering::Relaxed) {
+                return;
+            }
             ctx.out.event("counts", json!({"path": folder, "counts": std::mem::take(&mut batch)}));
             last = std::time::Instant::now();
         }
     }
-    if !batch.is_empty() {
+    if !batch.is_empty() && !stop.load(Ordering::Relaxed) {
         ctx.out.event("counts", json!({"path": folder, "counts": batch}));
     }
 }
 
 /// Entries for paths anywhere (a selection's details, the recent list, a paste).
 pub fn stat_many(ctx: &Ctx, paths: &[PathBuf]) -> Vec<Value> {
-    let roles = crate::places::roles();
+    let roles = cached_roles();
     let empty = HashSet::new();
     paths.iter().filter_map(|p| entry(ctx, p, &roles, &empty)).collect()
 }

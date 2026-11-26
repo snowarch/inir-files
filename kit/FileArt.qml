@@ -84,14 +84,16 @@ Item {
                 id: photo
                 anchors.fill: parent
                 anchors.margins: Math.max(2, Math.round(parent.width * 0.045))
-                source: root.cover.length > 0 ? Fmt.url(root.cover) : ""
+                source: root.visible && root.cover.length > 0 ? Fmt.url(root.cover) : ""
                 fillMode: Image.PreserveAspectCrop
                 clip: true
                 asynchronous: true
+                cache: false
                 smooth: true
-                // Both sides set: the picture is decoded to cover the print, one pixel to one.
-                sourceSize.width: width * (root.Window.window?.devicePixelRatio ?? 1)
-                sourceSize.height: height * (root.Window.window?.devicePixelRatio ?? 1)
+                // Bucket-aligned decode so zooming does not re-decode or leak covers.
+                readonly property int coverPx: Math.max(width, height) * (root.Window.window?.devicePixelRatio ?? 1) <= 128 ? 128 : 256
+                sourceSize.width: photo.coverPx
+                sourceSize.height: photo.coverPx
                 opacity: status === Image.Ready ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: Theme.fast } }
             }

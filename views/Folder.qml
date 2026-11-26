@@ -9,7 +9,10 @@ Item {
 
     property string path: Core.home
     property string mode: "folder"          // folder, trash, recent, search, start
-    readonly property string place: root.mode === "folder" ? root.path : root.mode === "search" ? root.searchRoot : root.mode + ":"
+    // Updated atomically at the end of enter()/search()/stopSearch() so switching mode + path never emits an intermediate place.
+    property string place: Core.home
+    property string loadedPlace: ""
+    readonly property string paneId: "p-" + Math.random().toString(36).slice(2, 9)
     property alias model: entries
     property var all: []
     property var rawAll: []
@@ -64,7 +67,10 @@ Item {
     property string held: ""
     onWatchedChanged: { Core.dropWatch(root.held); root.held = root.watched; Core.holdWatch(root.held) }
     Component.onCompleted: { root.held = root.watched; Core.holdWatch(root.held) }
-    Component.onDestruction: Core.dropWatch(root.held)
+    Component.onDestruction: {
+        Core.dropWatch(root.held)
+        Core.call("cancel", { token: "counts:" + root.paneId })
+    }
 
     signal reset()
     // A reading is in place, with what is chosen in it: after reset, and after a quiet update.
@@ -88,29 +94,65 @@ Item {
     }
     function indexOf(path: string): int { return root.at[path] ?? -1 }
 
+    function appendRows(list: var, from: int): void {
+        for (let k = from; k < list.length; k++) entries.append(list[k])
+    }
+    function normalize(target: string): string {
+        if (!target || target.length === 0) return Core.home
+        if (target.endsWith(":")) return target
+        if (target.length > 1 && target.endsWith("/")) return target.replace(/\/+$/, "") || "/"
+        return target
+    }
+    function syncPlace(): void {
+        const next = root.mode === "folder" ? root.path : root.mode === "search" ? root.searchRoot : root.mode + ":"
+        if (root.place !== next) root.place = next
+    }
+
     // ---- going places
     // `remember` false leaves the history as it is (a tab's first place). It is not typed bool: a typed parameter left
     // out arrives as false, and every plain go() then forgot where it came from.
     function go(target: string, remember: var): void {
-        if (remember !== false && target !== root.place) {
+        const norm = root.normalize(target)
+        if (remember !== false && norm !== root.place) {
             root.back = root.back.concat([root.place]).slice(-80)
             root.forward = []
         }
-        root.enter(target)
+        root.enter(norm)
     }
     function enter(target: string): void {
-        if (root.mode === "search") root.stopSearch()
-        if (target === "trash:" || target === "recent:" || target === "start:") {
-            root.mode = target.slice(0, -1)
+        const norm = root.normalize(target)
+        const prevMode = root.mode
+        if (root.mode === "search") root.stopSearch(false)
+        if (norm === "trash:" || norm === "recent:" || norm === "start:") {
+            root.mode = norm.slice(0, -1)
         } else {
             root.mode = "folder"
-            root.path = target
+            root.path = norm
         }
         root.query = ""
         root.filterText = ""
         root.clearSel()
         root.current = -1
         root.anchor = -1
+        root.syncPlace()
+        // Instant Back/Forward from LRU listing cache, followed by a quiet background revalidation against disk.
+        if (root.mode === "folder") {
+            const cached = Core.cachedList(root.path, root.showHidden, root.sortKey, root.desc, root.dirsFirst)
+            if (cached) {
+                const serial = ++root.loadSerial
+                root.apply(serial, cached, false)
+                root.load(true)
+                return
+            }
+        }
+        // Clear special-mode rows right away so recent/trash items never flash inside a new folder view while loading.
+        if (prevMode !== root.mode && prevMode !== "folder") {
+            root.all = []
+            root.rawAll = []
+            entries.clear()
+            root.reindex()
+            root.loadedPlace = ""
+        }
         root.load(false)
     }
     // Steps through the history: a negative count goes that many places back, a positive one forward. Arriving at a
@@ -149,15 +191,27 @@ Item {
     // ---- reading
     function load(keep: bool): void {
         const serial = ++root.loadSerial
-        root.loading = true
-        const done = r => root.apply(serial, r, keep)
+        const reqPath = root.path
+        const reqHidden = root.showHidden
+        const reqSort = root.sortKey
+        const reqDesc = root.desc
+        const reqDirsFirst = root.dirsFirst
+        if (!keep || root.loadedPlace !== root.place) root.loading = true
+        const done = r => {
+            if (!root) return
+            if (r.ok && root.mode === "folder" && reqPath === root.path)
+                Core.rememberList(reqPath, reqHidden, reqSort, reqDesc, reqDirsFirst, r)
+            root.apply(serial, r, keep)
+        }
         if (root.mode === "trash") Core.call("trash_list", {}, done)
         else if (root.mode === "recent") Core.call("recent", {}, done)
         else if (root.mode === "start") { if (keep) Core.refreshPlaces(); Core.call("recent", {}, done) }
         else if (root.mode === "search") root.runSearch()
-        else Core.call("list", { path: root.path, hidden: root.showHidden, sort: root.sortKey, desc: root.desc, dirsFirst: root.dirsFirst, counts: Prefs.get("counts") }, done)
+        else Core.call("list", { path: reqPath, hidden: reqHidden, sort: reqSort, desc: reqDesc, dirsFirst: reqDirsFirst, counts: Prefs.get("counts"), pane: root.paneId }, done)
     }
-    function reload(): void { if (root.mode !== "search") root.load(true) }
+    function reload(): void {
+        if (root.mode !== "search") root.load(root.loadedPlace === root.place)
+    }
 
     function apply(serial: int, r: var, keep: bool): void {
         if (serial !== root.loadSerial) return
@@ -177,14 +231,20 @@ Item {
             root.choose = []
             root.error = r.error
             root.all = []
+            root.rawAll = []
             entries.clear()
             root.reindex()
+            root.loadedPlace = root.place
             root.reset()
             root.applied()
             return
         }
         root.error = ""
-        if (r.path && root.mode === "folder") root.path = r.path
+        if (r.path && root.mode === "folder") {
+            const norm = root.normalize(r.path)
+            if (root.path !== norm) root.path = norm
+            root.syncPlace()
+        }
         root.hiddenCount = r.hidden ?? 0
         root.writable = r.writable ?? (root.mode === "trash")
         root.space = r.space ?? ({ total: 0, free: 0 })
@@ -194,12 +254,15 @@ Item {
         root.rawAll = list
         if (root.mode !== "search" && root.mode !== "start" && (root.filterText.trim().length > 0 || (root.portalFilter && root.portalFilter.length > 0)))
             list = root.filterList(list, root.filterText)
-        if (keep) root.merge(list)
+        // Only merge in-place when updating the SAME already-loaded folder and the model count is in sync.
+        const canMerge = keep && root.loadedPlace === root.place && entries.count === root.all.length
+        if (canMerge) root.merge(list)
         else {
             root.all = list
             entries.clear()
-            for (let k = 0; k < list.length; k++) entries.append(list[k])
+            root.appendRows(list, 0)
             root.reindex()
+            root.loadedPlace = root.place
             root.reset()
         }
         // What was selected and still exists stays selected.
@@ -234,7 +297,7 @@ Item {
         let i = 0, o = 0, j = 0
         while (j < list.length) {
             if (o >= old.length) {
-                entries.append(list.slice(j))
+                root.appendRows(list, j)
                 break
             }
             const have = old[o]
@@ -253,7 +316,7 @@ Item {
             } else {
                 // Two rows swapped places (a sort key changed): the rest is laid out again.
                 entries.remove(i, entries.count - i)
-                entries.append(list.slice(j))
+                root.appendRows(list, j)
                 break
             }
         }
@@ -266,16 +329,18 @@ Item {
     Connections {
         target: Core
         function onCounts(path, counts) {
-            if (root.mode !== "folder" || path !== root.path) return
+            if (root.mode !== "folder" || path !== root.path || root.loadedPlace !== root.place) return
             for (const name in counts) {
                 const i = root.indexOf(Fmt.join(root.path, name))
-                if (i >= 0) {
+                if (i >= 0 && i < entries.count) {
                     entries.setProperty(i, "items", counts[name])
                     root.all[i].items = counts[name]
                 }
             }
         }
         function onChanged(paths) {
+            // Skip inotify reloads while a fresh navigation load for this place is still in flight.
+            if (root.loading && root.loadedPlace !== root.place) return
             if (root.mode === "folder" && paths.indexOf(root.path) >= 0) root.load(true)
             else if (root.mode === "trash" && paths.some(p => p.indexOf("/Trash/") >= 0)) root.load(true)
         }
@@ -291,7 +356,7 @@ Item {
                 if (shown.length > 0) {
                     const start = root.all.length
                     root.all = root.all.concat(shown)
-                    entries.append(shown)
+                    root.appendRows(shown, 0)
                     for (let k = 0; k < shown.length; k++) root.at[shown[k].path] = start + k
                 }
             }
@@ -358,6 +423,7 @@ Item {
         if (root.mode !== "search") {
             root.searchRoot = root.mode === "folder" ? root.path : Core.home
             root.mode = "search"
+            root.syncPlace()
         }
         root.query = text
         root.runSearch()
@@ -372,6 +438,7 @@ Item {
         root.found = []
         root.kindCounts = ({})
         entries.clear()
+        root.loadedPlace = root.place
         root.reset()
         root.scanned = 0
         root.searching = true
@@ -390,6 +457,7 @@ Item {
             root.mode = "folder"
             root.path = root.searchRoot
             root.query = ""
+            root.syncPlace()
             root.load(false)
         }
     }
@@ -408,9 +476,10 @@ Item {
         if (root.mode !== "search") return
         root.clearSel()
         root.current = -1
-        root.all = root.found.filter(root.fits)
+        const next = root.found.filter(root.fits)
+        root.all = next
         entries.clear()
-        entries.append(root.all)
+        root.appendRows(next, 0)
         root.reindex()
         root.reset()
     }

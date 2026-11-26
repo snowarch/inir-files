@@ -59,7 +59,7 @@ pub struct Ctx {
 
 impl Ctx {
     /// A stop flag for a token; a new search or count under the same token stops the old one.
-    fn token(&self, token: &str) -> Arc<AtomicBool> {
+    pub fn token(&self, token: &str) -> Arc<AtomicBool> {
         let flag = Arc::new(AtomicBool::new(false));
         if let Some(old) = self.cancels.lock().unwrap().insert(token.to_string(), flag.clone()) {
             old.store(true, Ordering::Relaxed);
@@ -67,7 +67,13 @@ impl Ctx {
         flag
     }
 
-    fn release(&self, token: &str, flag: &Arc<AtomicBool>) {
+    pub fn cancel(&self, token: &str) {
+        if let Some(f) = self.cancels.lock().unwrap().get(token) {
+            f.store(true, Ordering::Relaxed);
+        }
+    }
+
+    pub fn release(&self, token: &str, flag: &Arc<AtomicBool>) {
         let mut map = self.cancels.lock().unwrap();
         if map.get(token).map(|f| Arc::ptr_eq(f, flag)).unwrap_or(false) {
             map.remove(token);
@@ -131,7 +137,9 @@ fn handle(ctx: &Arc<Ctx>, req: Value) {
             if list.is_empty() && !path.as_os_str().is_empty() {
                 list.push(path.clone());
             }
-            ctx.thumbs.request(list, &size, req["ahead"].as_bool().unwrap_or(false));
+            let ahead = req["ahead"].as_bool().unwrap_or(false);
+            let replace_ahead = req["replaceAhead"].as_bool().unwrap_or(false);
+            ctx.thumbs.request(list, &size, ahead, replace_ahead);
             Ok(json!({}))
         }
         // Slow (a PDF page takes a moment): drawn on its own thread, the answer comes when it is ready.
@@ -235,8 +243,17 @@ fn main() {
         }
         match serde_json::from_str::<Value>(&line) {
             Ok(req) => {
-                let ctx = ctx.clone();
-                std::thread::spawn(move || handle(&ctx, req));
+                // Fast lock-only ops run inline on the stdin loop to avoid spawning thousands of short-lived threads.
+                let fast = matches!(
+                    req["op"].as_str().unwrap_or(""),
+                    "ping" | "thumb" | "thumbs_clear" | "cancel" | "job_cancel" | "job_answer" | "chooser_reply"
+                );
+                if fast {
+                    handle(&ctx, req);
+                } else {
+                    let ctx = ctx.clone();
+                    std::thread::spawn(move || handle(&ctx, req));
+                }
             }
             Err(_) => ctx.out.event("error", json!({"error": "badjson"})),
         }

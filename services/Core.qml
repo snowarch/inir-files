@@ -68,6 +68,53 @@ Singleton {
         const j = Object.assign({}, root.jobs)
         delete j[id]
         root.jobs = j
+        if (root.jobNotes[id] !== undefined) {
+            const notes = Object.assign({}, root.jobNotes)
+            delete notes[id]
+            root.jobNotes = notes
+        }
+    }
+    // Lightweight LRU cache of recent folder listings (metadata only, <=1500 entries, max 16 folders) for instant Back/Forward.
+    // Always revalidated silently on disk; invalidated on inotify changed events or completed jobs.
+    property var folderCache: ({})
+    property var folderCacheOrder: []
+    function listCacheKey(path: string, hidden: bool, sort: string, desc: bool, dirsFirst: bool): string {
+        return path + "|" + (hidden ? "1" : "0") + "|" + sort + "|" + (desc ? "1" : "0") + "|" + (dirsFirst ? "1" : "0")
+    }
+    function cachedList(path: string, hidden: bool, sort: string, desc: bool, dirsFirst: bool): var {
+        const key = root.listCacheKey(path, hidden, sort, desc, dirsFirst)
+        const hit = root.folderCache[key]
+        if (!hit) return null
+        const idx = root.folderCacheOrder.indexOf(key)
+        if (idx >= 0) {
+            root.folderCacheOrder.splice(idx, 1)
+            root.folderCacheOrder.push(key)
+        }
+        return hit
+    }
+    function rememberList(path: string, hidden: bool, sort: string, desc: bool, dirsFirst: bool, reply: var): void {
+        if (!reply || !reply.ok || !reply.entries || reply.entries.length > 1500) return
+        const key = root.listCacheKey(path, hidden, sort, desc, dirsFirst)
+        root.folderCache[key] = reply
+        const idx = root.folderCacheOrder.indexOf(key)
+        if (idx >= 0) root.folderCacheOrder.splice(idx, 1)
+        root.folderCacheOrder.push(key)
+        while (root.folderCacheOrder.length > 16) {
+            const drop = root.folderCacheOrder.shift()
+            delete root.folderCache[drop]
+        }
+    }
+    function dropListCache(paths: var): void {
+        if (!paths) { root.folderCache = ({}); root.folderCacheOrder = []; return }
+        for (const p of paths) {
+            const prefix = p + "|"
+            for (let i = root.folderCacheOrder.length - 1; i >= 0; i--) {
+                if (root.folderCacheOrder[i].startsWith(prefix)) {
+                    delete root.folderCache[root.folderCacheOrder[i]]
+                    root.folderCacheOrder.splice(i, 1)
+                }
+            }
+        }
     }
     // Folders on screen in any window, counted: the core watches each while one pane still shows it.
     property var watchCount: ({})
@@ -103,6 +150,7 @@ Singleton {
 
     // ---- thumbnails: asked for by what is on screen, answered to the item that asked
     property var thumbs: ({})
+    property var thumbOrder: []
     property var thumbWaiters: ({})
     property var thumbAsk: ({})
     function thumbKey(path: string, size: string, mtime: real): string { return path + "|" + size + "|" + mtime }
@@ -136,17 +184,17 @@ Singleton {
         if (!thumbFlush.running) thumbFlush.start()
         return null
     }
-    // The rest of a folder, made before it is scrolled to: behind all that is on screen, in the folder's order.
+    // The next few screens of a folder, made before they are scrolled to; replaces stale prefetch from prior folders.
     function thumbAhead(list: var, size: string): void {
         const paths = []
         for (const e of list) {
-            if (paths.length >= 5000) break
+            if (paths.length >= 160) break
             if (!root.wantsThumb(e)) continue
             if (root.thumbs[root.thumbKey(e.path, size, e.mtime)] !== undefined) continue
             root.thumbMtimes[e.path + "|" + size] = e.mtime
             paths.push(e.path)
         }
-        if (paths.length > 0) root.call("thumb", { paths: paths, size: size, ahead: true })
+        if (paths.length > 0) root.call("thumb", { paths: paths, size: size, ahead: true, replaceAhead: true })
     }
     function unthumb(path: string, size: string, mtime: real, item: var): void {
         const key = root.thumbKey(path, size, mtime)
@@ -177,8 +225,17 @@ Singleton {
         }
     }
     function gotThumb(m: var): void {
-        const mtime = root.thumbMtimes[m.path + "|" + m.size] ?? 0
+        const mkey = m.path + "|" + m.size
+        const mtime = root.thumbMtimes[mkey] ?? 0
         const key = root.thumbKey(m.path, m.size, mtime)
+        if (root.thumbs[key] === undefined) {
+            root.thumbOrder.push(key)
+            if (root.thumbOrder.length > 2000) {
+                const drop = root.thumbOrder.splice(0, 400)
+                for (let i = 0; i < drop.length; i++) delete root.thumbs[drop[i]]
+                root.thumbMtimes = ({})
+            }
+        }
         root.thumbs[key] = m.file
         const list = root.thumbWaiters[key]
         if (!list) return
@@ -209,11 +266,15 @@ Singleton {
             break
         case "thumb": root.gotThumb(m); break
         case "counts": root.counts(m.path, m.counts); break
-        case "changed": root.changed(m.paths); break
+        case "changed":
+            root.dropListCache(m.paths)
+            root.changed(m.paths)
+            break
         case "job": {
             const j = Object.assign({}, root.jobs)
             j[m.job] = m
             root.jobs = j
+            if (m.state === "done" || m.state === "failed" || m.state === "cancelled") root.dropListCache(null)
             root.jobEvent(m)
             break
         }

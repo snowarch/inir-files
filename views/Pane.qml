@@ -68,6 +68,30 @@ FocusScope {
     property string typed: ""
     property var memo: ({})
     property string shownPlace: ""
+    property bool pendingScroll: false
+    // Unload the visual delegate tree of background tabs after 5 s to reclaim GPU textures and QML items,
+    // while keeping rapid Ctrl+Tab switching instantaneous and preserving Folder state + scroll position.
+    property bool viewAwake: true
+    readonly property bool pageShown: root.page ? root.page.visible : true
+    onPageShownChanged: {
+        if (root.pageShown) {
+            sleepView.stop()
+            root.viewAwake = true
+        } else {
+            if (root.view && root.shownPlace.length > 0) root.memo[root.shownPlace] = root.view.contentY
+            sleepView.restart()
+        }
+    }
+    Timer {
+        id: sleepView
+        interval: 5000
+        onTriggered: {
+            if (!root.pageShown) {
+                root.viewAwake = false
+                Qt.callLater(gc)
+            }
+        }
+    }
 
     function activate(): void {
         root.page.activePane = root
@@ -77,26 +101,37 @@ FocusScope {
 
     Folder {
         id: folder
-        onRevealed: i => { if (loader.item) loader.item.reveal(i) }
+        onRevealed: i => { if (loader.item && !root.pendingScroll) loader.item.reveal(i) }
         onPlaceChanged: {
             if (root.view && root.shownPlace.length > 0) root.memo[root.shownPlace] = root.view.contentY
             root.shownPlace = folder.place
             root.filterOpen = false
-            if (folder.mode === "folder") {
-                const mem = Prefs.recall("folderViews", {})
-                root.viewMode = mem[folder.path] ?? Prefs.get("view")
-            }
         }
         onReset: {
+            if (folder.mode === "folder") {
+                const mem = Prefs.recall("folderViews", {})
+                const want = mem[folder.path] ?? Prefs.get("view")
+                if (root.viewMode !== want) root.viewMode = want
+            }
             // A new place arrives with a short fade, so the eye reads the swap as one step. Columns keep the columns
             // that stay, so they do not fade.
             if (Theme.motion && root.viewMode !== "columns") arrive.restart()
-            const y = root.memo[folder.place]
+            root.pendingScroll = true
+        }
+        onApplied: {
+            if (!root.pendingScroll) return
+            root.pendingScroll = false
+            const place = folder.place
+            const y = root.memo[place]
+            const idx = folder.current
             Qt.callLater(() => {
+                if (!root || folder.place !== place) return
                 const v = root.view
                 if (!v) return
-                if (y !== undefined && folder.current < 0) v.contentY = Math.min(y, Math.max(v.originY - v.topMargin, v.contentHeight - v.height + v.originY + v.bottomMargin))
-                else if (folder.current < 0) { if (v.positionViewAtBeginning) v.positionViewAtBeginning(); else v.contentY = v.originY }
+                if (idx >= 0 && loader.item) loader.item.reveal(idx)
+                else if (y !== undefined) v.contentY = Math.min(y, Math.max(v.originY - v.topMargin, v.contentHeight - v.height + v.originY + v.bottomMargin))
+                else if (v.positionViewAtBeginning) v.positionViewAtBeginning()
+                else v.contentY = v.originY
             })
         }
     }
@@ -292,7 +327,20 @@ FocusScope {
         id: loader
         anchors.fill: parent
         focus: true
+        active: root.viewAwake
         sourceComponent: folder.mode === "start" ? homeView : root.viewMode === "list" ? listView : root.viewMode === "columns" ? columnsView : root.viewMode === "gallery" ? galleryView : gridView
+        onLoaded: {
+            const place = folder.place
+            const y = root.memo[place]
+            const idx = folder.current
+            Qt.callLater(() => {
+                if (!root || folder.place !== place) return
+                const v = root.view
+                if (!v) return
+                if (y !== undefined) v.contentY = Math.min(y, Math.max(v.originY - v.topMargin, v.contentHeight - v.height + v.originY + v.bottomMargin))
+                else if (idx >= 0 && loader.item) loader.item.reveal(idx)
+            })
+        }
     }
     NumberAnimation { id: arrive; target: loader; property: "opacity"; from: 0; to: 1; duration: Theme.fast; easing.type: Easing.OutCubic }
     Component { id: homeView; HomePane { pane: root } }

@@ -170,11 +170,13 @@ Item {
             Image {
                 id: wallImg
                 anchors.fill: parent
-                source: root.wallSource
+                source: root.visible ? root.wallSource : ""
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
+                cache: false
                 smooth: true
-                sourceSize.width: Math.max(1, Math.round(flick.width * root.dpr))
+                // Step-quantized decode width so window resizing never caches dozens of decoded wallpapers.
+                sourceSize.width: Math.min(1920, Math.ceil(Math.max(256, flick.width * root.dpr) / 256) * 256)
                 opacity: status === Image.Ready ? (Theme.light ? 0.34 : 0.42) : 0
                 Behavior on opacity { NumberAnimation { duration: Theme.normal } }
             }

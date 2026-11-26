@@ -94,6 +94,7 @@ FloatingWindow {
         root.tabs = list
         root.tabIndex = current === page ? Math.min(i, list.length - 1) : list.indexOf(current)
         page.destroy()
+        Qt.callLater(gc)
         Qt.callLater(root.focusPane)
     }
     function duplicateTab(i: int): void {
@@ -121,6 +122,7 @@ FloatingWindow {
         root.closedTabs = root.closedTabs.concat(closed).slice(-10)
         root.tabs = [kept]
         root.tabIndex = 0
+        Qt.callLater(gc)
         Qt.callLater(root.focusPane)
     }
     function closeTabsRight(from: int): void {
@@ -134,6 +136,7 @@ FloatingWindow {
         root.closedTabs = root.closedTabs.concat(closed).slice(-10)
         root.tabs = list
         root.tabIndex = Math.min(root.tabIndex, list.length - 1)
+        Qt.callLater(gc)
         Qt.callLater(root.focusPane)
     }
     function splitWithTab(i: int): void {
