@@ -129,7 +129,7 @@ Sheet {
     // ---- peer list
     Item {
         width: parent.width
-        height: Math.min(Theme.dp(240), Math.max(Theme.dp(92), peerCol.implicitHeight))
+        height: Math.min(Theme.dp(240), Math.max(Core.localSendPeers.length === 0 ? Theme.dp(92) : Theme.dp(56), peerCol.implicitHeight))
         Flickable {
             anchors.fill: parent
             contentHeight: peerCol.implicitHeight
@@ -356,17 +356,27 @@ Sheet {
     Item {
         width: parent.width
         height: Theme.dp(34)
+        readonly property string curDir: root.browser.activePane && root.browser.activePane.folder.mode === "folder" && root.browser.activePane.folder.writable ? root.browser.activePane.folder.path : ""
         Row {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            spacing: Theme.dp(8)
+            spacing: Theme.dp(6)
             Txt {
                 anchors.verticalCenter: parent.verticalCenter
                 text: I18n.tr("Save to: %1", Fmt.pretty(Core.localSendSaveDir || Core.home))
                 size: Theme.small
                 color: Theme.ink3
                 elide: Text.ElideMiddle
-                width: Math.min(implicitWidth, Theme.dp(240))
+                width: Math.min(implicitWidth, Theme.dp(200))
+            }
+            Act {
+                visible: parent.parent.curDir.length > 0 && parent.parent.curDir !== Core.localSendSaveDir
+                anchors.verticalCenter: parent.verticalCenter
+                size: Theme.dp(24)
+                glyphSize: Theme.dp(15)
+                glyph: "folder"
+                tip: I18n.tr("Save in current folder")
+                onClicked: Core.call("localsend_config", { saveDir: parent.parent.curDir }, r => { if (r.ok) Core.applyLocalSendStatus(r) })
             }
         }
         Row {
