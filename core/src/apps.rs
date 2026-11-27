@@ -376,8 +376,21 @@ pub fn set_default(req: &Value) -> Result<Value, String> {
     Ok(json!({}))
 }
 
+// D-Bus finds an activatable name by its file name first: a session file must be called after the name it owns.
+// Packages give theirs other names only so two packages can sit side by side in /usr/share; the user's directory
+// comes first in the search, so this file puts iNiR Files ahead of Nautilus, Dolphin and Thunar.
 fn fm1_service_path() -> PathBuf {
+    util::data_home().join("dbus-1/services/org.freedesktop.FileManager1.service")
+}
+
+// Releases up to 0.2.0 wrote this name; dbus-broker warns about it at every login.
+fn fm1_legacy_path() -> PathBuf {
     util::data_home().join("dbus-1/services/inir-files.FileManager1.service")
+}
+
+// The person may keep a FileManager1 file of their own there: only one that starts iNiR Files is ours.
+fn fm1_ours(path: &Path) -> bool {
+    fs::read_to_string(path).map(|t| t.lines().any(|l| l.starts_with("Exec=") && l.contains("inir-files"))).unwrap_or(false)
 }
 
 fn launcher_path() -> Option<PathBuf> {
@@ -414,7 +427,7 @@ fn mime_default_for(mime: &str) -> Option<String> {
 
 pub fn default_fm_get() -> Result<Value, String> {
     let def = mime_default_for("inode/directory").map(|s| s == "inir-files.desktop").unwrap_or(false);
-    let dbus = fm1_service_path().is_file();
+    let dbus = fm1_ours(&fm1_service_path()) || fm1_ours(&fm1_legacy_path());
     Ok(json!({"default": def, "dbus": dbus}))
 }
 
@@ -430,10 +443,13 @@ pub fn default_fm_set(req: &Value) -> Result<Value, String> {
         let tmp = svc.with_extension("inir-tmp");
         fs::write(&tmp, body).map_err(|e| e.to_string())?;
         fs::rename(&tmp, &svc).map_err(|e| e.to_string())?;
+        let _ = fs::remove_file(fm1_legacy_path());
         set_default(&json!({"mime": "inode/directory", "app": "inir-files.desktop"}))?;
     } else {
-        if svc.is_file() {
-            let _ = fs::remove_file(&svc);
+        for path in [svc, fm1_legacy_path()] {
+            if fm1_ours(&path) {
+                let _ = fs::remove_file(&path);
+            }
         }
         let file = util::config_home().join("mimeapps.list");
         if let Ok(text) = fs::read_to_string(&file) {

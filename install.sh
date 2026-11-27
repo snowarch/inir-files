@@ -93,10 +93,12 @@ install -Dm644 "${BASE}/current/share/applications/inir-files.desktop" "${DATA_H
 
 if [ "$SET_DEFAULT" = true ]; then
     mkdir -p "${DATA_HOME}/dbus-1/services"
+    # Named after the bus name, as D-Bus wants a session file; the user's directory comes ahead of /usr/share.
     sed "s|^Exec=.*|Exec=${BIN_DIR}/inir-files --service|" \
         "${BASE}/current/share/dbus-1/services/inir-files.FileManager1.service" \
-        > "${DATA_HOME}/dbus-1/services/inir-files.FileManager1.service"
-    chmod 644 "${DATA_HOME}/dbus-1/services/inir-files.FileManager1.service"
+        > "${DATA_HOME}/dbus-1/services/org.freedesktop.FileManager1.service"
+    chmod 644 "${DATA_HOME}/dbus-1/services/org.freedesktop.FileManager1.service"
+    rm -f "${DATA_HOME}/dbus-1/services/inir-files.FileManager1.service"
     if command -v xdg-mime >/dev/null 2>&1; then
         mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}"
         xdg-mime default inir-files.desktop inode/directory || true
