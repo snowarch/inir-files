@@ -14,6 +14,7 @@ MouseArea {
     property point start
     property point end
     property bool drawing: false
+    property string clickedPath: ""
     property var base: null
     property real edgeSpeed: 0
 
@@ -54,10 +55,12 @@ MouseArea {
         root.update()
     }
     onReleased: mouse => {
+        root.clickedPath = ""
         if (root.pane.held) { root.pane.held = false; root.drawing = false; root.edgeSpeed = 0; return }
         if (!root.drawing && mouse.button === Qt.LeftButton) {
             const i = root.rowAt(root.start.x, root.start.y)
             if (i >= 0) {
+                root.clickedPath = root.pane.folder.all[i]?.path ?? ""
                 if (mouse.modifiers & Qt.ShiftModifier) root.pane.folder.range(i, (mouse.modifiers & Qt.ControlModifier) !== 0)
                 else if (mouse.modifiers & Qt.ControlModifier) root.pane.folder.toggle(i)
                 else root.pane.folder.only(i)
@@ -66,7 +69,7 @@ MouseArea {
         root.drawing = false
         root.edgeSpeed = 0
     }
-    onCanceled: { root.drawing = false; root.edgeSpeed = 0 }
+    onCanceled: { root.clickedPath = ""; root.drawing = false; root.edgeSpeed = 0 }
     // A finger held on empty space: the place's menu, or the row's where a row runs under it.
     Hold {
         onHeld: at => {
@@ -79,7 +82,20 @@ MouseArea {
             root.pane.browser.actions.backgroundMenu(root.pane, p.x, p.y)
         }
     }
-    onDoubleClicked: mouse => { if (mouse.button === Qt.LeftButton && root.pane.folder.mode === "folder" && !root.drawing) root.pane.folder.goUp() }
+    // List metadata shares the band with empty space. Open only if both clicks hit the same entry.
+    onDoubleClicked: mouse => {
+        const path = root.clickedPath
+        root.clickedPath = ""
+        if (mouse.button === Qt.LeftButton && mouse.modifiers === Qt.NoModifier && path.length > 0) {
+            const at = root.content(mouse.x, mouse.y)
+            const i = root.rowAt(at.x, at.y)
+            if (root.pane.folder.all[i]?.path === path) {
+                root.pane.openItem(i, false)
+                return
+            }
+        }
+        mouse.accepted = false
+    }
 
     Timer {
         interval: 16

@@ -123,7 +123,8 @@ Item {
     }
     function enter(target: string): void {
         const norm = root.normalize(target)
-        const prevMode = root.mode
+        const serial = ++root.loadSerial
+        root.loadedPlace = ""
         if (root.mode === "search") root.stopSearch(false)
         if (norm === "trash:" || norm === "recent:" || norm === "start:") {
             root.mode = norm.slice(0, -1)
@@ -141,21 +142,20 @@ Item {
         if (root.mode === "folder" && !root.admin) {
             const cached = Core.cachedList(root.path, root.showHidden, root.sortKey, root.desc, root.dirsFirst)
             if (cached) {
-                const serial = ++root.loadSerial
                 root.apply(serial, cached, false)
                 root.load(true)
                 return
             }
         }
-        // Clear special-mode rows right away so recent/trash items never flash inside a new folder view while loading.
-        if (prevMode !== root.mode && prevMode !== "folder") {
-            root.all = []
-            root.rawAll = []
-            entries.clear()
-            root.reindex()
-            root.loadedPlace = ""
-        }
+        // The previous place's rows must not open on a click while the new place is being read.
+        root.clearListing()
         root.load(false)
+    }
+    function clearListing(): void {
+        root.all = []
+        root.rawAll = []
+        entries.clear()
+        root.at = ({})
     }
     // Steps through the history: a negative count goes that many places back, a positive one forward. Arriving at a
     // folder above the one left, the folder on the way down is the current one, as going up does.
@@ -198,12 +198,15 @@ Item {
         const reqSort = root.sortKey
         const reqDesc = root.desc
         const reqDirsFirst = root.dirsFirst
-        const reqAdmin = root.admin && root.mode === "folder"
+        const reqMode = root.mode
+        const reqAdmin = root.admin && reqMode === "folder"
         if (!keep || root.loadedPlace !== root.place) root.loading = true
         const done = r => {
-            if (!root) return
-            if (r.ok && root.mode === "folder" && !reqAdmin && reqPath === root.path)
-                Core.rememberList(reqPath, reqHidden, reqSort, reqDesc, reqDirsFirst, r)
+            if (!root || serial !== root.loadSerial) return
+            if (reqMode === "folder" && !reqAdmin) {
+                if (r.ok) Core.rememberList(reqPath, reqHidden, reqSort, reqDesc, reqDirsFirst, r)
+                else if (r.error === "missing" || r.error === "notdir") Core.dropListCache([reqPath])
+            }
             root.apply(serial, r, keep)
         }
         if (root.mode === "trash") Core.call("trash_list", {}, done)
@@ -220,23 +223,15 @@ Item {
         if (serial !== root.loadSerial) return
         root.loading = false
         if (!r.ok) {
-            // A folder that went away (deleted, unmounted) gives way to the nearest one still there.
-            if (keep && r.error === "missing" && root.mode === "folder" && root.path !== "/") {
-                root.enter(Fmt.parent(root.path))
-                return
-            }
-            // A file asked for as a place shows chosen in its folder.
-            if (r.error === "notdir" && root.mode === "folder") {
+            // An explicitly opened file is selected in its parent. A refresh never changes the destination.
+            if (!keep && r.error === "notdir" && root.mode === "folder") {
                 root.choose = [root.path]
                 root.enter(Fmt.parent(root.path))
                 return
             }
             root.choose = []
             root.error = r.error
-            root.all = []
-            root.rawAll = []
-            entries.clear()
-            root.reindex()
+            root.clearListing()
             root.loadedPlace = root.place
             root.reset()
             root.applied()
@@ -410,7 +405,7 @@ Item {
         return list.filter(e => root.matchesPortal(e, pf) && (q.length === 0 || root.matchesFilter(e.name, q)))
     }
     function refreshFilter(): void {
-        if (root.mode === "search" || root.mode === "start") return
+        if (root.loadedPlace !== root.place || root.mode === "search" || root.mode === "start") return
         const next = root.filterList(root.rawAll, root.filterText)
         root.all = next
         entries.clear()
@@ -439,15 +434,15 @@ Item {
         root.runSearch()
     }
     function runSearch(): void {
+        ++root.loadSerial
         if (root.token.length > 0) Core.call("cancel", { token: root.token })
         root.token = "search-" + Math.random().toString(36).slice(2)
         root.clearSel()
         root.current = -1
-        root.all = []
-        root.at = ({})
+        root.anchor = -1
         root.found = []
         root.kindCounts = ({})
-        entries.clear()
+        root.clearListing()
         root.loadedPlace = root.place
         root.reset()
         root.scanned = 0
@@ -457,19 +452,16 @@ Item {
         Core.call("search", { token: root.token, root: root.searchRoot, query: root.query, hidden: root.showHidden, content: root.content })
     }
     function stopSearch(back: bool): void {
+        if (back) {
+            root.enter(root.searchRoot)
+            return
+        }
         if (root.token.length > 0) Core.call("cancel", { token: root.token })
         root.token = ""
         root.searching = false
         root.found = []
         root.kindCounts = ({})
         root.kindFilter = ""
-        if (back) {
-            root.mode = "folder"
-            root.path = root.searchRoot
-            root.query = ""
-            root.syncPlace()
-            root.load(false)
-        }
     }
     onContentChanged: if (root.mode === "search") root.runSearch()
 

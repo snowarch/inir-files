@@ -22,6 +22,13 @@ MouseArea {
         else pane.folder.goForward()
     }
 
+    // A newer navigation supersedes a swipe that has not been committed yet.
+    Connections {
+        target: root.pane?.folder ?? null
+        function onPlaceChanged() { root.end(false) }
+        function onModeChanged() { root.end(false) }
+    }
+
     // ---- the swipe: one gesture runs from ScrollBegin to ScrollEnd. Where the compositor sends no phases, a run of fine
     // steps that ends in a still moment is one gesture. A wheel's notches are not fine and pass by.
     property var pane: null
